@@ -1,0 +1,15 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+# signing material never goes into the repo
+keystore/
+*.jks
+*.keystore
+keystore.properties
+# local working data (device lists, outputs)
+data/
