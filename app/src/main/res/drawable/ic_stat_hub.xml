@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status bar icon for the hub's notifications: a house with a signal dot. White on transparent, as Android requires. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,3L2,11.5h3V20h14v-8.5h3L12,3zM12,17.5c-0.83,0 -1.5,-0.67 -1.5,-1.5s0.67,-1.5 1.5,-1.5 1.5,0.67 1.5,1.5 -0.67,1.5 -1.5,1.5zM15.54,13.46c-0.94,-0.94 -2.2,-1.46 -3.54,-1.46s-2.6,0.52 -3.54,1.46l-1.06,-1.06C8.62,11.18 10.25,10.5 12,10.5s3.38,0.68 4.6,1.9l-1.06,1.06z" />
+</vector>

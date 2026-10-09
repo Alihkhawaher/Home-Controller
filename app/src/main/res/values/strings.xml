@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name" translatable="false">Home Controller</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_automations">Automations</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Common actions -->
+    <string name="action_add">Add</string>
+    <string name="action_add_device">Add device</string>
+    <string name="action_allow">Allow</string>
+    <string name="action_back">Back</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_change">Change</string>
+    <string name="action_close">Close</string>
+    <string name="action_collapse">Collapse</string>
+    <string name="action_create">Create</string>
+    <string name="action_decrease">Lower</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_expand">Expand</string>
+    <string name="action_find_devices">Find devices</string>
+    <string name="action_increase">Raise</string>
+    <string name="action_look_up">Look up</string>
+    <string name="action_more">More options</string>
+    <string name="action_move_down">Move down</string>
+    <string name="action_move_up">Move up</string>
+    <string name="action_ok">OK</string>
+    <string name="action_open_settings">Open settings</string>
+    <string name="action_open_wifi_settings">Open Wi-Fi settings</string>
+    <string name="action_power">Power</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_save">Save</string>
+    <string name="action_scan">Scan my network</string>
+    <string name="action_scan_again">Scan again</string>
+
+    <!-- Values and status -->
+    <string name="value_on">On</string>
+    <string name="value_off">Off</string>
+    <string name="value_unknown">—</string>
+    <string name="status_online">Online</string>
+    <string name="status_offline">Offline</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_sending">Sending…</string>
+    <string name="updated_just_now">Updated just now</string>
+    <plurals name="updated_seconds">
+        <item quantity="one">Updated %d s ago</item>
+        <item quantity="other">Updated %d s ago</item>
+    </plurals>
+    <plurals name="updated_minutes">
+        <item quantity="one">Updated %d min ago</item>
+        <item quantity="other">Updated %d min ago</item>
+    </plurals>
+
+    <!-- Problems with devices -->
+    <string name="issue_timeout">The device didn’t answer</string>
+    <string name="issue_unknown_device">This device isn’t in your home any more</string>
+    <string name="issue_no_connector">No plugin for “%1$s”</string>
+    <string name="issue_generic">Something went wrong</string>
+
+    <!-- Home -->
+    <string name="greeting_morning">Good morning</string>
+    <string name="greeting_afternoon">Good afternoon</string>
+    <string name="greeting_evening">Good evening</string>
+    <string name="greeting_night">Welcome home</string>
+    <string name="summary_on">On</string>
+    <string name="summary_inside">Inside</string>
+    <string name="summary_online">Online</string>
+    <string name="summary_fraction">%1$d/%2$d</string>
+    <string name="room_none">No room</string>
+    <plurals name="device_count">
+        <item quantity="one">%d device</item>
+        <item quantity="other">%d devices</item>
+    </plurals>
+    <string name="tile_mode_to_target">%1$s to %2$s</string>
+    <string name="tile_set_to">Set to %1$s</string>
+    <plurals name="home_show_hidden">
+        <item quantity="one">Show %d hidden device</item>
+        <item quantity="other">Show %d hidden devices</item>
+    </plurals>
+    <string name="home_hide_hidden">Hide hidden devices</string>
+    <string name="empty_home_title">Your home, on your Wi-Fi</string>
+    <string name="empty_home_text">Find the air conditioners and other smart devices on your network, and control them right here.</string>
+    <string name="empty_home_privacy">No cloud, no account. Everything stays at home.</string>
+    <string name="message_power_failed">Couldn’t switch %1$s: %2$s</string>
+
+    <!-- Device -->
+    <string name="dial_description">Target temperature</string>
+    <string name="dial_room">Room %1$s</string>
+    <string name="device_waiting">Connecting to the device…</string>
+    <string name="offline_title">Can’t reach this device</string>
+    <string name="offline_text">Check that it is on and connected to the same Wi-Fi.</string>
+    <string name="device_features">Features</string>
+    <string name="device_readings">Readings</string>
+    <string name="device_diagnostics">Diagnostics</string>
+    <string name="device_info_plugin">Plugin</string>
+    <string name="device_info_address">Address</string>
+    <string name="device_info_model">Model</string>
+    <string name="device_info_firmware">Firmware</string>
+    <string name="device_info_id">Device ID</string>
+    <string name="device_menu_rename">Rename</string>
+    <string name="device_menu_room">Room</string>
+    <string name="device_menu_hide">Hide from home</string>
+    <string name="device_menu_show">Show on home</string>
+    <string name="device_menu_remove">Remove</string>
+    <string name="device_rename_title">Rename device</string>
+    <string name="device_name_label">Name</string>
+    <string name="device_remove_title">Remove %1$s?</string>
+    <string name="device_remove_text">It disappears from your home and automations can’t control it. You can add it again with Find devices.</string>
+    <string name="message_change_failed">Couldn’t change %1$s: %2$s</string>
+    <string name="message_device_hidden">Hidden from the home screen</string>
+    <string name="message_device_shown">Shown on the home screen</string>
+
+    <!-- Rooms -->
+    <string name="room_add">Add room</string>
+    <string name="room_new_title">New room</string>
+    <string name="room_new_chip">New room</string>
+    <string name="room_rename_title">Rename room</string>
+    <string name="room_name_label">Room name</string>
+    <string name="room_delete_title">Delete %1$s?</string>
+    <string name="room_delete_text">Its devices stay in your home, without a room.</string>
+    <string name="rooms_empty">No rooms yet. Rooms group your devices on the home screen.</string>
+    <plurals name="rooms_count">
+        <item quantity="one">%d room</item>
+        <item quantity="other">%d rooms</item>
+    </plurals>
+    <string-array name="room_suggestions">
+        <item>Living room</item>
+        <item>Bedroom</item>
+        <item>Kitchen</item>
+        <item>Office</item>
+        <item>Guest room</item>
+    </string-array>
+
+    <!-- Discovery -->
+    <string name="discovery_title">Find devices</string>
+    <string name="discovery_idle_title">Scan your network</string>
+    <string name="discovery_idle_text">Devices answer on your Wi-Fi. Nothing leaves your network.</string>
+    <string name="discovery_scanning_title">Looking for devices…</string>
+    <string name="discovery_scanning_text">Scanning %1$s</string>
+    <string name="discovery_network_text">Scanned %1$s</string>
+    <string name="discovery_scanning_button">Scanning…</string>
+    <string name="discovery_no_wifi_title">Not on Wi-Fi</string>
+    <string name="discovery_no_wifi_text">Connect to your home Wi-Fi, then scan again.</string>
+    <string name="discovery_found_none">No devices found yet</string>
+    <plurals name="discovery_found">
+        <item quantity="one">Found %d device</item>
+        <item quantity="other">Found %d devices</item>
+    </plurals>
+    <plurals name="discovery_found_short">
+        <item quantity="one">%d found</item>
+        <item quantity="other">%d found</item>
+    </plurals>
+    <string name="discovery_connector_failed">Couldn’t search</string>
+    <string name="discovery_connector_searching">Searching…</string>
+    <string name="discovery_connector_none">Nothing found</string>
+    <string name="discovery_connector_none_hint">Make sure the devices are on and use this Wi-Fi, or add one by its IP address below.</string>
+    <string name="discovery_added">Added</string>
+    <string name="discovery_firmware">Firmware %1$s</string>
+    <string name="discovery_ip_title">Add by IP address</string>
+    <string name="discovery_ip_text">If scanning finds nothing, your router may block broadcast. Type the device’s address from your router’s list of connected devices.</string>
+    <string name="discovery_ip_label">IP address</string>
+    <string name="discovery_ip_placeholder" translatable="false">192.0.2.10</string>
+    <string name="discovery_ip_invalid">Enter an address like 192.0.2.10</string>
+    <string name="discovery_ip_nothing">Nothing answered at %1$s.</string>
+    <string name="add_sheet_title">Add device</string>
+    <string name="add_sheet_room">Room</string>
+    <string name="add_sheet_confirm">Add to home</string>
+    <string name="message_device_added">%1$s added to your home</string>
+
+    <!-- Automations -->
+    <string name="automations_empty_title">Make your home work for you</string>
+    <string name="automations_empty_text">Turn the AC on before you get home, or get a message when a room gets too hot. Automations run on this phone, even without internet.</string>
+    <string name="automation_create_first">Create an automation</string>
+    <string name="automation_new">New automation</string>
+    <string name="automation_edit">Edit automation</string>
+    <string name="automation_name_label">Name</string>
+    <string name="automation_when">When</string>
+    <string name="automation_then">Then</string>
+    <string name="trigger_time">Time of day</string>
+    <string name="trigger_device">Device</string>
+    <string name="trigger_repeat">Repeat</string>
+    <string name="days_every_day">Every day</string>
+    <string name="time_picker_title">Select time</string>
+    <string name="automation_device_label">Device</string>
+    <string name="automation_value_label">Value</string>
+    <string name="automation_add_device_action">Control a device</string>
+    <string name="automation_add_notify_action">Send a notification</string>
+    <string name="automation_action_device">Control a device</string>
+    <string name="automation_action_notify">Send a notification</string>
+    <string name="automation_notify_title">Title</string>
+    <string name="automation_notify_text">Message</string>
+    <string name="automation_remove_action">Remove action</string>
+    <string name="automation_no_devices_hint">Add a device first to use it in automations.</string>
+    <string name="automation_device_missing">This device was removed. Pick another one.</string>
+    <string name="automation_enabled">Enabled</string>
+    <string name="automation_enabled_text">Runs by itself when it is due</string>
+    <string name="automation_run_now">Run now</string>
+    <string name="automation_delete_title">Delete automation?</string>
+    <string name="automation_delete_text">“%1$s” will be deleted.</string>
+    <string name="automation_unknown_device">Unknown device</string>
+    <string name="automation_a_device">a device</string>
+    <string name="automation_auto_name_time">At %1$s</string>
+    <string name="automation_auto_name_state">When %1$s changes</string>
+    <string name="automation_last_ran">Last ran at %1$s</string>
+    <string name="automation_failed_title">%1$s didn’t finish</string>
+    <string name="automation_failed_text">Couldn’t change %1$s: %2$s</string>
+    <string name="message_automation_running">Running “%1$s”…</string>
+    <string name="problem_trigger_device">Choose a device and a value to watch.</string>
+    <string name="problem_trigger_value">Choose the value to compare with.</string>
+    <string name="problem_no_actions">Add at least one action.</string>
+    <string name="problem_empty_device_action">Each device action needs at least one change.</string>
+    <string name="problem_empty_notification">Give each notification a title or a message.</string>
+    <string name="op_eq">is</string>
+    <string name="op_ne">is not</string>
+    <string name="op_gt">is above</string>
+    <string name="op_ge">is at least</string>
+    <string name="op_lt">is below</string>
+    <string name="op_le">is at most</string>
+    <string name="trigger_time_summary">At %1$s · %2$s</string>
+    <string name="trigger_state_summary">When %1$s %2$s %3$s %4$s</string>
+    <string name="action_set_summary">%1$s → %2$s</string>
+    <string name="action_change_summary">%1$s: %2$s</string>
+    <string name="action_notify_summary">Notify: %1$s</string>
+
+    <!-- Settings -->
+    <string name="settings_hub">Hub</string>
+    <string name="settings_background">Run hub in background</string>
+    <string name="settings_background_text">Keep checking devices and running automations when the app is closed, and after a restart. A quiet notification shows the hub is running.</string>
+    <string name="settings_poll_foreground">While the app is open, check every</string>
+    <string name="settings_poll_background">In the background, check every</string>
+    <string name="interval_seconds">%1$d s</string>
+    <string name="interval_minutes">%1$d min</string>
+    <string name="settings_permissions">Permissions</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_notifications_on">Allowed</string>
+    <string name="settings_notifications_off">Off, so automations can’t alert you</string>
+    <string name="settings_battery">Battery</string>
+    <string name="settings_battery_on">Unrestricted, so automations run on time</string>
+    <string name="settings_battery_off">Android may pause the hub to save battery</string>
+    <string name="battery_dialog_title">Let the hub run unrestricted?</string>
+    <string name="battery_dialog_text">Android pauses apps in the background to save battery, which can make automations run late. Let Home Controller run unrestricted so the hub keeps time.</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_dynamic_color">Wallpaper colours</string>
+    <string name="settings_dynamic_color_text">Use colours from your wallpaper</string>
+    <string name="settings_home">Home</string>
+    <string name="settings_rooms">Rooms</string>
+    <string name="settings_about_section">About</string>
+    <string name="settings_plugins">Plugins</string>
+    <string name="settings_about">About Home Controller</string>
+    <plurals name="plugins_installed">
+        <item quantity="one">%d plugin installed</item>
+        <item quantity="other">%d plugins installed</item>
+    </plurals>
+
+    <!-- Plugins -->
+    <string name="plugins_intro">Each family of devices is a plugin. Every plugin talks to devices directly on your Wi-Fi: no cloud, no account.</string>
+    <string name="plugin_version">Version %1$s</string>
+    <string name="plugin_built_in">Built in</string>
+    <string name="plugin_homepage">Website</string>
+    <string name="plugins_more_title">More connectors coming</string>
+    <string name="plugins_more_text">TVs, switches, IR blasters and more. Each one is a small plugin, and contributions are welcome.</string>
+    <string name="plugins_contribute">Contribute on GitHub</string>
+    <string name="category_climate">Climate</string>
+    <string name="category_tv">TVs</string>
+    <string name="category_switch">Switches</string>
+    <string name="category_light">Lights</string>
+    <string name="category_sensor">Sensors</string>
+    <string name="category_media">Media</string>
+    <string name="category_other">Other</string>
+
+    <!-- About -->
+    <string name="about_version">Version %1$s</string>
+    <string name="about_version_code">Version %1$s (%2$d)</string>
+    <string name="about_tagline">Control your home directly on your Wi-Fi. The phone is the hub: no server, no cloud, no account.</string>
+    <string name="about_source">Source code</string>
+    <string name="about_source_text" translatable="false">github.com/Alihkhawaher/Home-Controller</string>
+    <string name="about_license">Licence</string>
+    <string name="about_license_text">Open source under the Apache License 2.0</string>
+    <string name="about_privacy">Privacy</string>
+    <string name="about_privacy_text">No analytics, no cloud. Nothing leaves your network.</string>
+    <string name="about_credits">Credits</string>
+    <string name="about_credit_greeclimate">For documenting the Gree protocol</string>
+    <string name="about_credit_gree_remote">For documenting the Gree protocol</string>
+
+    <!-- Hub notifications -->
+    <string name="channel_hub">Hub status</string>
+    <string name="channel_hub_description">The quiet notification that shows the hub is running.</string>
+    <string name="channel_automations">Automations</string>
+    <string name="channel_automations_description">Messages sent by your automations.</string>
+    <string name="channel_problems">Problems</string>
+    <string name="channel_problems_description">When an automation can’t reach a device.</string>
+    <string name="hub_notification_title_empty">Hub running</string>
+    <plurals name="hub_notification_title">
+        <item quantity="one">Hub running · %d device</item>
+        <item quantity="other">Hub running · %d devices</item>
+    </plurals>
+    <string name="hub_notification_text_empty">No devices yet</string>
+    <string name="hub_notification_text_all_online">All devices online</string>
+    <string name="hub_notification_text_none_online">Can’t reach your devices right now</string>
+    <!-- "online" and "offline" do not change with the number. -->
+    <string name="hub_notification_text_some" tools:ignore="PluralsCandidate">%1$d online, %2$d offline</string>
+</resources>
