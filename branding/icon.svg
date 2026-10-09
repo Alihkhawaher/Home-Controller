@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="18 18 72 72">
+  <title>Home Controller</title>
+  <rect x="0" y="0" width="108" height="108" fill="#0E3A4F"/>
+  <path d="M33.604,44.151 L50.782,29.706 A5,5 0 0 1 57.218,29.706 L74.396,44.151 A4.5,4.5 0 0 1 76,47.595 L76,71.5 A7.5,7.5 0 0 1 68.5,79 L39.5,79 A7.5,7.5 0 0 1 32,71.5 L32,47.595 A4.5,4.5 0 0 1 33.604,44.151 Z" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44.808,70.692 A13,13 0 0 1 60.303,50.13" fill="none" stroke="#5CE1E6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M65.37,55.197 A13,13 0 0 1 63.192,70.692" fill="none" stroke="#2C6E80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M56.392,52.308 A6.8,6.8 0 1 0 69.992,52.308 A6.8,6.8 0 1 0 56.392,52.308 Z" fill="#0E3A4F"/>
+  <path d="M58.792,52.308 A4.4,4.4 0 1 0 67.592,52.308 A4.4,4.4 0 1 0 58.792,52.308 Z" fill="#FFB547"/>
+  <path d="M51,61.5 A3,3 0 1 0 57,61.5 A3,3 0 1 0 51,61.5 Z" fill="#FFFFFF"/>
+</svg>

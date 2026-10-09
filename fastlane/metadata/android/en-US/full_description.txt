@@ -1,0 +1,31 @@
+<p><b>Your home hub, in your pocket. No server. No cloud.</b></p>
+
+<p>Home Controller controls your smart-home devices directly on your Wi-Fi and runs your automations on the phone itself. There is no server to set up, no account to create, and nothing goes through a vendor's cloud. It keeps working when the internet is down.</p>
+
+<p><b>Why</b></p>
+<p>A home server such as Home Assistant has to run around the clock on hardware you maintain. Vendor apps route every tap through their cloud and stop working when the internet or their servers go down. Home Controller makes the phone the hub: it talks to your devices on your local network, using the same local protocols their own apps use.</p>
+
+<p><b>Features</b></p>
+<ul>
+<li>Local control only: no account, no sign-in, no vendor servers</li>
+<li>Automations on the phone: time-of-day and device-state triggers, conditions, device and notification actions</li>
+<li>Optional background hub that runs your automations while the app is closed</li>
+<li>Rooms, instant controls, clear offline messages</li>
+<li>Diagnostics: fault codes, filter reminders, module firmware</li>
+<li>Light and dark themes with dynamic colour</li>
+<li>Plugin connectors: new device families plug in without changing the app</li>
+</ul>
+
+<p><b>Supported devices</b></p>
+<ul>
+<li>Gree Wi-Fi air conditioners, and Gree-made units sold under other brands: power, mode, temperature, fan speed, vertical and horizontal swing, display light, turbo, quiet, sleep, ioniser and X-Fan</li>
+</ul>
+<p>Coming next: LG and Samsung TVs, Tuya local, Broadlink, Shelly, Sonoff, Philips Hue and MQTT.</p>
+
+<p><b>Privacy</b></p>
+<p>No analytics, no tracking, no ads. All traffic stays on your local network, and your devices, rooms and automations stay on your phone.</p>
+
+<p><b>Open source</b></p>
+<p>Home Controller is free software under the Apache License 2.0. Source code, documentation and the connector guide: https://github.com/Alihkhawaher/Home-Controller</p>
+
+<p>Gree and other brand names are trademarks of their respective owners. Home Controller is not affiliated with any device maker.</p>

@@ -1,0 +1,5 @@
+First release.
+- Control devices directly on your Wi-Fi: no server, no cloud, no account.
+- Gree Wi-Fi air conditioners: power, mode, temperature, fan, swing, light, turbo, quiet, sleep, ioniser, X-Fan, diagnostics.
+- Automations that run on the phone, with an optional background hub.
+- Rooms, light and dark themes.

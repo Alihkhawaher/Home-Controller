@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <title>Home Controller hub illustration</title>
+  <!-- Orbits -->
+  <g fill="none" stroke="#174C63" stroke-width="2">
+    <circle cx="320" cy="320" r="150"/>
+    <circle cx="320" cy="320" r="230"/>
+    <circle cx="320" cy="320" r="306"/>
+  </g>
+
+  <!-- Links from the phone to the devices: plain local traffic -->
+  <g stroke="#2C6E80" stroke-width="4" stroke-linecap="round" stroke-dasharray="0.1 13" fill="none">
+    <path d="M320,320 L157,157"/>
+    <path d="M320,320 L483,157"/>
+    <path d="M320,320 L483,483"/>
+    <path d="M320,320 L157,483"/>
+  </g>
+  <circle cx="211" cy="211" r="6" fill="#FFB547"/>
+  <circle cx="429" cy="429" r="6" fill="#5CE1E6"/>
+
+  <!-- Devices -->
+  <g fill="#14485F" stroke="#2C6E80" stroke-width="3">
+    <circle cx="157" cy="157" r="46"/>
+    <circle cx="483" cy="157" r="46"/>
+    <circle cx="483" cy="483" r="46"/>
+    <circle cx="157" cy="483" r="46"/>
+  </g>
+  <g fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- air conditioner: snowflake -->
+    <g transform="translate(157 157)">
+      <path d="M0,-20 L0,20 M-17.3,-10 L17.3,10 M-17.3,10 L17.3,-10"/>
+      <path d="M-6,-16 L0,-10 L6,-16 M-6,16 L0,10 L6,16"/>
+      <path d="M-16.9,-2.8 L-8.7,-5 L-10.9,-13.2 M16.9,2.8 L8.7,5 L10.9,13.2"/>
+      <path d="M-10.9,13.2 L-8.7,5 L-16.9,2.8 M10.9,-13.2 L8.7,-5 L16.9,-2.8"/>
+    </g>
+    <!-- TV -->
+    <g transform="translate(483 157)">
+      <rect x="-20" y="-15" width="40" height="26" rx="4"/>
+      <path d="M-9,19 L9,19"/>
+    </g>
+    <!-- light -->
+    <g transform="translate(483 483)">
+      <path d="M-7,8 C-7,2 -13,-1 -13,-8 A13,13 0 1 1 13,-8 C13,-1 7,2 7,8 Z"/>
+      <path d="M-5,16 L5,16"/>
+    </g>
+    <!-- switch -->
+    <g transform="translate(157 483)">
+      <rect x="-20" y="-11" width="40" height="22" rx="11"/>
+    </g>
+  </g>
+  <circle cx="166" cy="483" r="6.5" fill="#FFB547"/>
+
+  <!-- The phone: the hub -->
+  <rect x="242" y="168" width="156" height="304" rx="30" fill="#0A2C3C" stroke="#FFFFFF" stroke-width="6"/>
+  <path d="M302,190 L338,190" stroke="#2C6E80" stroke-width="5" stroke-linecap="round"/>
+  <g fill="none" stroke-width="11" stroke-linecap="round">
+    <path d="M287.47,332.53 A46,46 0 0 1 342.30,259.77" stroke="#5CE1E6"/>
+    <path d="M360.23,277.70 A46,46 0 0 1 352.53,332.53" stroke="#2C6E80"/>
+  </g>
+  <circle cx="352.53" cy="267.47" r="17" fill="#0A2C3C"/>
+  <circle cx="352.53" cy="267.47" r="11.5" fill="#FFB547"/>
+  <circle cx="320" cy="300" r="7.5" fill="#FFFFFF"/>
+  <rect x="276" y="386" width="88" height="10" rx="5" fill="#1D5870"/>
+  <rect x="294" y="408" width="52" height="10" rx="5" fill="#1D5870"/>
+</svg>

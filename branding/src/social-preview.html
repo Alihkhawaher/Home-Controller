@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home Controller social preview</title>
+<style>
+  :root { --navy: #0E3A4F; --white: #FFFFFF; --cyan: #5CE1E6; --dim: #2C6E80; --amber: #FFB547; }
+  html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; background: var(--navy); }
+  body { position: relative; font-family: "Poppins", "Segoe UI", system-ui, sans-serif; color: var(--white); }
+  .hub { position: absolute; left: 676px; top: 0; width: 640px; height: 640px; }
+  .copy { position: absolute; left: 88px; top: 0; height: 640px; width: 640px;
+          display: flex; flex-direction: column; justify-content: center; }
+  .icon { width: 92px; height: 92px; margin-bottom: 30px; border-radius: 23.6%; box-shadow: 0 0 0 2px #2C6E80; }
+  h1 { margin: 0; font-size: 70px; line-height: 1.05; font-weight: 600; letter-spacing: -0.5px; }
+  .tag { margin: 22px 0 0; font-size: 30px; line-height: 1.4; font-weight: 400; }
+  .tag span { color: var(--cyan); font-weight: 500; }
+  .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 38px; }
+  .chip { font-size: 19px; font-weight: 500; padding: 7px 18px; border-radius: 999px;
+          border: 2px solid var(--dim); color: #D7EEF2; }
+  .chip b { color: var(--amber); font-weight: 600; }
+</style>
+</head>
+<body>
+  <img class="hub" src="hub.svg" alt="">
+  <div class="copy">
+    <img class="icon" src="../icon-rounded.svg" alt="">
+    <h1>Home Controller</h1>
+    <p class="tag">Your home hub, in your pocket.<br><span>No server. No cloud.</span></p>
+    <div class="chips">
+      <div class="chip">Local Wi-Fi only</div>
+      <div class="chip">Plugin connectors</div>
+      <div class="chip">Open source</div>
+    </div>
+  </div>
+</body>
+</html>

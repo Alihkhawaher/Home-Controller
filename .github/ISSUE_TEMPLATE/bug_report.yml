@@ -1,0 +1,89 @@
+name: Bug report
+description: Something does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. Please remove real IP addresses, MAC addresses,
+        Wi-Fi names and device keys from anything you paste, or replace them with made-up values.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem, and what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Home Controller version
+      description: The release you installed.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: phone
+    attributes:
+      label: Phone and Android version
+      placeholder: "Pixel 8, Android 15"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connector
+    attributes:
+      label: Which connector is involved?
+      options:
+        - Gree air conditioners
+        - None, the app itself
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device brand and model
+      description: For a device problem, the indoor unit or device model, and the module firmware if the app shows it.
+      placeholder: "Gree Pular, module firmware 1.21"
+
+  - type: dropdown
+    id: background
+    attributes:
+      label: Was the background hub on?
+      options:
+        - "Yes"
+        - "No"
+        - Not sure
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Check them for private data before you paste.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I removed IP addresses, MAC addresses, Wi-Fi names and keys from this report.
+          required: true

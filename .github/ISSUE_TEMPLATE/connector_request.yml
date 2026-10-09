@@ -1,0 +1,77 @@
+name: Connector request
+description: Ask for support for a new device or device family.
+labels: ["connector request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Home Controller only talks to devices **on your local network**, so a connector needs a device with a
+        local API: something it answers on your Wi-Fi without the vendor's cloud. The more you can tell us about
+        that, the sooner a connector can happen.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: What kind of device is it?
+      options:
+        - Air conditioner or heat pump
+        - TV
+        - Switch, plug or relay
+        - Light
+        - Sensor
+        - Media player or speaker
+        - IR or RF remote
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Which device? Brand and model
+      placeholder: "Brand, model number"
+    validations:
+      required: true
+
+  - type: input
+    id: vendor-app
+    attributes:
+      label: Which app controls it today?
+      placeholder: "The vendor's app name"
+
+  - type: dropdown
+    id: local-api
+    attributes:
+      label: Does it have a local API?
+      description: Does it answer on your Wi-Fi without the vendor's cloud?
+      options:
+        - Yes, the vendor documents a local API
+        - Yes, an open-source project controls it locally
+        - It keeps working in the vendor app when the internet is down
+        - Not sure
+        - No, it only works through the cloud
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: Documentation or projects that control it locally
+      description: Links to API docs, a Home Assistant integration, a Python or Node library, protocol notes.
+      placeholder: |
+        - https://...
+
+  - type: textarea
+    id: wanted
+    attributes:
+      label: What would you like to control?
+      placeholder: "Power, input, volume ..."
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I own this device and can test a development build.
+        - label: I can capture local traffic between the vendor app and the device (with private values removed).
+        - label: I would like to write the connector myself.
