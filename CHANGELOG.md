@@ -4,7 +4,7 @@ All notable changes to Home Controller are recorded in this file. The format fol
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.6.0 — 2026-10-10
 
 ### Added
 
@@ -28,6 +28,8 @@ All notable changes to Home Controller are recorded in this file. The format fol
   (Settings → Home → Weekend: Friday–Saturday, Saturday–Sunday, Sunday or Friday); until it is chosen it follows the
   phone's region: Friday–Saturday in Saudi Arabia and the other Friday–Saturday countries, Saturday–Sunday
   elsewhere. Summaries say "Workdays" and "Weekend" when the days match.
+- Gree: "Beep on commands" (turn the unit's beep off for the app's changes), anti direct blow, auto display light,
+  and outdoor temperature and humidity readings, on units that report them.
 
 ### Changed
 
