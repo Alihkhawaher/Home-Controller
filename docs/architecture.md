@@ -81,6 +81,7 @@ interface DeviceSession : AutoCloseable {
     val capabilities: List<Capability>
     suspend fun read(): DeviceState
     suspend fun apply(changes: List<SetValue>): DeviceState
+    fun updates(): Flow<DeviceState>? = null
     override fun close() {}
 }
 ```
@@ -88,6 +89,12 @@ interface DeviceSession : AutoCloseable {
 - `read` returns the current state and never changes the device. The hub calls it on a timer.
 - `apply` changes one or more values in one go and returns the state afterwards. It is the only call that changes a
   device.
+- `updates` is optional. A session that keeps a live connection returns a hot flow of the states the device pushes
+  on its own (a button pressed, an alarm going off), each a whole state; a polled-only session keeps the default,
+  `null`. The flow belongs to the session: collecting it opens nothing, and it goes quiet when the session closes. It
+  never carries an "offline" state; the hub finds an unreachable device by polling. States from one session (from
+  `read`, `apply` and `updates`) have non-decreasing `updatedAtMillis`, so the hub can tell a push that crossed a poll
+  from a newer one. The Tuya connector pushes; Gree is polled.
 - `close` releases sockets and other resources.
 
 A `DeviceState` is a map of capability key to `Value` (`Bool`, `Num` or `Text`), plus `online`, the time it was
@@ -141,11 +148,16 @@ The hub is the part of the app that makes it more than a remote control.
   (5 seconds, then 10, 20 and so on, up to 5 minutes).
 - It reads each device on a timer: every few seconds while the app is on screen, and about once a minute in the
   background. Both intervals are settings.
+- It follows the pushes of every session that offers `updates()`, for as long as that session is open: a pushed state
+  is shown at once, kept in the power history, and checked against the state-triggered automations straight away, so
+  an alarm going off notifies within a second rather than at the next poll. Polling carries on as the fallback.
 - It keeps the latest and the previous state of every device. The UI shows the latest state with any changes still
   on their way laid over it, so a control moves the moment it is tapped and settles on what the device confirms.
 - It runs as an Android foreground service when the user turns on background running, so automations fire while the
   app is closed. Android requires a visible notification for that.
-- Once a minute it asks the automations engine which automations are due, then carries out their actions.
+- Once a minute it asks the automations engine which automations are due, then carries out their actions. When a
+  device pushes a change it asks again at once, for the state-triggered automations only. Both checks share one
+  baseline of previous states, so an edge fires an automation once, whichever check sees it first.
 
 ## The automations engine
 
@@ -209,6 +221,12 @@ sequenceDiagram
         Conn->>Dev: status request
         Dev-->>Conn: status
         Conn-->>Hub: DeviceState
+    end
+    opt the session keeps a live connection
+        Dev-->>Conn: pushes a change on its own
+        Conn-->>Hub: updates() emits the new DeviceState
+        Hub->>Engine: due(now, state-triggered automations, ...)
+        Engine-->>Hub: automations to run at once
     end
     User->>UI: Set 24 °C
     UI->>Hub: apply(target_temperature = 24)

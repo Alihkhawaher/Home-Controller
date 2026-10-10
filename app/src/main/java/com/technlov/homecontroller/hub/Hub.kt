@@ -11,6 +11,7 @@ import com.technlov.home.core.DeviceSession
 import com.technlov.home.core.DeviceState
 import com.technlov.home.core.EventLog
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.Trigger
 import com.technlov.home.core.info
 import com.technlov.home.core.trace
 import com.technlov.home.core.warn
@@ -22,12 +23,20 @@ import com.technlov.homecontroller.history.HistorySink
 import com.technlov.homecontroller.data.SavedDevice
 import com.technlov.homecontroller.diag.LogSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +66,10 @@ interface HubEvents {
  * The hub: owns one [DeviceSession] per saved device, polls their states, sends changes with an optimistic overlay,
  * and runs automations every minute. Pure Kotlin (no Android), so it is unit-tested on the JVM. [HubService] keeps
  * it alive by running [run] in a foreground service; the UI calls [refresh] and [apply] directly.
+ *
+ * A session that offers [DeviceSession.updates] (a device on a live connection) is also followed for as long as it
+ * is open: each pushed state is shown at once, kept in the history, and checked against the state-triggered
+ * automations straight away. Polling carries on at the normal interval as the fallback.
  *
  * A device error never escapes: the device is marked offline and retried with [Backoff].
  */
@@ -91,11 +104,19 @@ class Hub(
         @Volatile var name: String = name
         var offlineSince: Long? = null
         var session: DeviceSession? = null
+
+        /** Follows the open session's pushes ([DeviceSession.updates]); ends with the session. */
+        var pushes: Job? = null
+
+        /** [DeviceState.updatedAtMillis] of the newest state shown from the open session: an older push is stale. */
+        var shownStamp = Long.MIN_VALUE
         var failures = 0
         var nextAttemptAt = 0L
         @Volatile var view = SlotView(LinkStatus.CONNECTING, null, capabilities, null, null)
 
         fun closeSession() {
+            pushes?.cancel()
+            pushes = null
             val open = session ?: return
             session = null
             runCatching { open.close() }
@@ -106,6 +127,12 @@ class Hub(
     private val overlay = OptimisticOverlay()
     private val syncMutex = Mutex()
     private val runMutex = Mutex()
+
+    /** Guards [previousStates], shared by the minute tick and the push-driven state checks. */
+    private val automationMutex = Mutex()
+
+    /** Parent of the push collectors (one per open session that offers updates) and the automation runs they start. */
+    private val pushWork = SupervisorJob()
     private val publishLock = Any()
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private var previousStates: Map<DeviceKey, DeviceState> = emptyMap()
@@ -149,6 +176,7 @@ class Hub(
                 withContext(NonCancellable) {
                     slots.values.forEach { slot -> slot.mutex.withLock { slot.closeSession() } }
                 }
+                pushWork.cancelChildren() // automations a push started stop with the hub, like the minute tick's
             }
         }
     }
@@ -216,13 +244,19 @@ class Hub(
     /** One automation pass for the minute [now]. Called every minute by [run]; public for tests. */
     suspend fun tick(now: LocalDateTime) {
         val data = repository.current()
+        val due = dueNow(now, data.automations.filter { it.enabled })
+        for (automation in due) execute(automation, data)
+    }
+
+    /**
+     * The automations among [candidates] due at [now], against the states shown and the states of the last check
+     * (a minute tick or a push), which become the new baseline. Their last run is set to [now].
+     */
+    private suspend fun dueNow(now: LocalDateTime, candidates: List<Automation>): List<Automation> = automationMutex.withLock {
         val states = currentStates()
-        val due = engine.due(now, data.automations.filter { it.enabled }, states, previousStates, _lastRuns.value)
+        val due = engine.due(now, candidates, states, previousStates, _lastRuns.value)
         previousStates = states
-        for (automation in due) {
-            _lastRuns.update { it + (automation.id to now) }
-            execute(automation, data)
-        }
+        due.onEach { automation -> _lastRuns.update { it + (automation.id to now) } }
     }
 
     // ---- loops ----
@@ -289,6 +323,8 @@ class Hub(
         // Secrets are stored sealed; the connector gets them in clear, in memory only.
         val session = connector.open(ref.copy(extras = SecretBox.unsealExtras(ref.extras)))
         slot.session = session
+        slot.shownStamp = Long.MIN_VALUE
+        session.updates()?.let { updates -> slot.pushes = followPushes(slot, session, updates) }
         rememberWhereItIs(slot, ref, session.device)
         val capabilities = session.capabilities
         log.info(LogSource.HUB, "${slot.name}: connected at ${ref.address} (${capabilities.size} capabilities)")
@@ -337,8 +373,84 @@ class Hub(
         slot.failures = 0
         slot.nextAttemptAt = 0
         slot.offlineSince = null
+        slot.shownStamp = state.updatedAtMillis
         slot.view = slot.view.copy(status = LinkStatus.ONLINE, state = state, issue = null, lastSeenMillis = now)
         history.record(slot.ref.key(), slot.view.capabilities, state, now)
+    }
+
+    // ---- pushes ----
+
+    /**
+     * Follows [session]'s pushes for as long as it is [slot]'s session (closing it cancels this). Started undispatched,
+     * so it is listening before the session's first read; it runs where device calls run ([ioContext]) and never
+     * throws.
+     */
+    private suspend fun followPushes(slot: Slot, session: DeviceSession, updates: Flow<DeviceState>): Job {
+        val context = currentCoroutineContext().minusKey(Job) + pushWork + CoroutineName("pushes: ${slot.name}")
+        return CoroutineScope(context).launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                updates.collect { state -> onPushed(slot, session, state) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn(LogSource.HUB, "${slot.name}: live updates stopped; polling only", e)
+            }
+        }
+    }
+
+    /**
+     * A state the device pushed: shown at once and kept in the history like a poll, then checked against the
+     * state-triggered automations straight away -- an alarm going off notifies within a second, not at the next poll.
+     * A push from a session that is no longer the slot's, or older than a poll it crossed (by its stamp), is dropped.
+     */
+    private suspend fun onPushed(slot: Slot, session: DeviceSession, state: DeviceState) {
+        if (!state.online) return // pushes carry what the device said; an unreachable device is found by polling
+        val shown = slot.mutex.withLock {
+            when {
+                slot.session !== session -> false
+                state.updatedAtMillis < slot.shownStamp -> {
+                    log.trace(LogSource.HUB) { "${slot.name}: a push older than the state shown; skipped" }
+                    false
+                }
+                else -> {
+                    onSuccess(slot, state)
+                    true
+                }
+            }
+        }
+        if (!shown) return
+        log.trace(LogSource.HUB) { "${slot.name}: pushed update (${state.values.size} values)" }
+        publish()
+        runStateTriggers()
+    }
+
+    /**
+     * The state-triggered automations that are due now, run at once (time triggers stay on the minute tick). They
+     * share the baseline with the tick, so an edge fires once whichever check sees it first. The runs are not tied to
+     * the pushing session: an action that fails on that same device and closes its session still completes.
+     */
+    private suspend fun runStateTriggers() {
+        try {
+            val data = repository.current()
+            val candidates = data.automations.filter { it.enabled && it.trigger is Trigger.StateMatches }
+            if (candidates.isEmpty()) return
+            val due = dueNow(clock(), candidates)
+            if (due.isEmpty()) return
+            CoroutineScope(currentCoroutineContext().minusKey(Job) + pushWork).launch(start = CoroutineStart.UNDISPATCHED) {
+                try {
+                    for (automation in due) execute(automation, data)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.warn(LogSource.HUB, "Automation run failed", e)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // An engine or storage error must not stop the updates; the minute tick checks again.
+            log.warn(LogSource.HUB, "Automation check failed", e)
+        }
     }
 
     private fun onFailure(slot: Slot, error: Throwable) {

@@ -14,6 +14,7 @@ import com.technlov.home.core.SetValue
 import com.technlov.home.core.Value
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -51,7 +52,8 @@ val climateCapabilities = listOf(
 
 /**
  * A scriptable connector: no network at all. Each device's state lives in [states]; [failReads] / [failApplies]
- * make it throw, and [applyGate] lets a test hold an apply in flight.
+ * make it throw, and [applyGate] lets a test hold an apply in flight. With [pushing] on, sessions offer
+ * [DeviceSession.updates] and [push] makes a device report a change on its own.
  */
 class FakeConnector(override val info: ConnectorInfo = ConnectorInfo("fake", "Fake devices", "For tests", setOf(DeviceCategory.CLIMATE), "1", "None")) : Connector {
     val states = mutableMapOf<String, MutableMap<String, Value>>()
@@ -59,6 +61,18 @@ class FakeConnector(override val info: ConnectorInfo = ConnectorInfo("fake", "Fa
     var failApplies = false
     var applyGate: CompletableDeferred<Unit>? = null
     var opens = 0
+    var pushing = false
+    private val pushes = mutableMapOf<String, MutableSharedFlow<DeviceState>>()
+
+    /** How many collectors follow a device's pushes right now (the hub's, while its session is open). */
+    fun listeners(deviceId: String): Int = pushes[deviceId]?.subscriptionCount?.value ?: 0
+
+    /** The device reports [changes] on its own. [at] stamps the state; the default is newer than any read so far. */
+    fun push(deviceId: String, changes: Map<String, Value>, at: Long = System.currentTimeMillis()) {
+        val values = states.getValue(deviceId)
+        values.putAll(changes)
+        pushes[deviceId]?.tryEmit(DeviceState(values.toMap(), updatedAtMillis = at))
+    }
 
     override suspend fun discover(network: LocalNetwork, timeoutMs: Long): List<DeviceRef> = emptyList()
 
@@ -72,9 +86,11 @@ class FakeConnector(override val info: ConnectorInfo = ConnectorInfo("fake", "Fa
                 Keys.CURRENT_TEMPERATURE to Value.Num(27.0),
             )
         }
+        val updates = if (pushing) pushes.getOrPut(device.id) { MutableSharedFlow(extraBufferCapacity = 16) } else null
         return object : DeviceSession {
             override val device = device
             override val capabilities = climateCapabilities
+            override fun updates(): Flow<DeviceState>? = updates
             override suspend fun read(): DeviceState {
                 if (failReads) throw IllegalStateException("no reply")
                 return DeviceState(values.toMap())

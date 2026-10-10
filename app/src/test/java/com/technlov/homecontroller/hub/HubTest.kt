@@ -3,11 +3,14 @@ package com.technlov.homecontroller.hub
 import com.technlov.home.core.Action
 import com.technlov.home.core.Automation
 import com.technlov.home.core.AutomationEngine
+import com.technlov.home.core.Capability
 import com.technlov.home.core.ConnectorRegistry
+import com.technlov.home.core.DefaultAutomationEngine
 import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceState
 import com.technlov.home.core.EventLog
 import com.technlov.home.core.Keys
+import com.technlov.home.core.Op
 import com.technlov.home.core.SetValue
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
@@ -18,6 +21,7 @@ import com.technlov.homecontroller.data.HomeData
 import com.technlov.homecontroller.data.HomeRepository
 import com.technlov.homecontroller.data.SavedDevice
 import com.technlov.homecontroller.exampleRef
+import com.technlov.homecontroller.history.HistorySink
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -212,5 +216,74 @@ class HubTest {
         due = emptyList()
         hub.tick(now.plusMinutes(1))
         assertTrue("previous states are handed to the engine", seenPrevious!!.containsKey(ac))
+    }
+
+    // ---- pushes (sessions on a live connection) ----
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun aPushShowsAtOnceIsKeptAndFiresAStateAutomationWithoutWaitingForAPoll() = runTest {
+        connector.pushing = true
+        val kept = mutableListOf<DeviceState>()
+        val history = object : HistorySink {
+            override fun record(device: DeviceKey, capabilities: List<Capability>, state: DeviceState, atMillis: Long) {
+                kept += state
+            }
+        }
+        val tooHot = Automation(
+            id = "too-hot",
+            name = "Too hot",
+            trigger = Trigger.StateMatches(ac, Keys.CURRENT_TEMPERATURE, Op.GE, Value.Num(30.0)),
+            actions = listOf(Action.Notify("Too hot", "The bedroom is at 31")),
+        )
+        repository.saveAutomation(tooHot)
+        val live = Hub(
+            ConnectorRegistry(listOf(connector)), repository, DefaultAutomationEngine(), events,
+            ioContext = EmptyCoroutineContext, history = history,
+        )
+        live.refresh(listOf(ac))
+        assertEquals("the hub follows the session's pushes", 1, connector.listeners("ac-1"))
+        val minute = LocalDateTime.of(2026, 10, 10, 18, 0)
+        live.tick(minute) // 27 degrees: nothing due, and the baseline is set
+        val readings = kept.size
+
+        connector.push("ac-1", mapOf(Keys.CURRENT_TEMPERATURE to Value.Num(31.0)))
+        runCurrent() // no poll, no minute tick
+
+        val shown = live.live.value.getValue(ac)
+        assertEquals(31.0, shown.state!!.number(Keys.CURRENT_TEMPERATURE)!!, 0.0)
+        assertEquals(LinkStatus.ONLINE, shown.status)
+        assertEquals(listOf("Too hot" to "The bedroom is at 31"), notifications)
+        assertEquals("the pushed reading goes to the history", readings + 1, kept.size)
+        assertTrue(live.lastRuns.value.containsKey("too-hot"))
+
+        // Still hot: neither another push nor the next minute's tick runs it again (one edge, one run).
+        connector.push("ac-1", mapOf(Keys.CURRENT_TEMPERATURE to Value.Num(31.5)))
+        runCurrent()
+        live.tick(minute.plusMinutes(1))
+        assertEquals(1, notifications.size)
+        assertEquals(31.5, live.live.value.getValue(ac).state!!.number(Keys.CURRENT_TEMPERATURE)!!, 0.0)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun aPushOlderThanThePollItCrossedIsSkippedAndAClosedSessionIsNoLongerFollowed() = runTest {
+        connector.pushing = true
+        hub.refresh(listOf(ac))
+        connector.push("ac-1", mapOf(Keys.TARGET_TEMPERATURE to Value.Num(18.0)), at = 0L) // stamped before the read
+        runCurrent()
+        assertEquals(24.0, hub.live.value.getValue(ac).state!!.number(Keys.TARGET_TEMPERATURE)!!, 0.0)
+
+        repository.removeDevice(ac)
+        hub.refresh()
+        runCurrent()
+        assertEquals("closing the session stops following it", 0, connector.listeners("ac-1"))
+    }
+
+    @Test
+    fun aPolledOnlySessionIsNotFollowed() = runTest {
+        hub.refresh(listOf(ac))
+        assertEquals(0, connector.listeners("ac-1"))
+        assertEquals(LinkStatus.ONLINE, hub.live.value.getValue(ac).status)
     }
 }

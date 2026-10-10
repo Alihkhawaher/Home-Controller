@@ -4,6 +4,27 @@ All notable changes to Home Controller are recorded in this file. The format fol
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- Live Tuya connections: each Tuya device keeps one connection open while the hub runs and reports its changes the
+  moment they happen (a plug switched by hand, an alarm host sounding). The hub shows them at once, keeps the readings
+  in the power history, and runs state-triggered automations within a second instead of at the next poll. Polling
+  carries on as the fallback. Still direct to the device on your Wi-Fi: no relay, no server, no cloud.
+- The connection is kept open with a heartbeat every 10 s when idle, and reopened by itself (after 1 s, then up to a
+  minute apart) when it drops or goes silent.
+- Fresh meter readings: metering plugs (power, current, voltage) and the OWON PC321-TY meter are asked to re-measure
+  on every other read (UPDATEDPS), as tuya-local does; a device that ignores the request is read as before.
+- Plugin contract: `DeviceSession.updates()`, an optional push channel. Connectors that only poll need no change.
+
+### Fixed
+
+- Tuya: a device's own STATUS report could be taken for the reply to a status query, after which replies came one
+  request behind. Replies are now matched to their request by command (and sequence number below protocol 3.5).
+- Tuya: closing a device's session now closes its socket. Before, a reconnect left the old socket open, and devices
+  that take one local connection could refuse the new one.
+
 ## 0.5.0 — 2026-10-10
 
 ### Added
