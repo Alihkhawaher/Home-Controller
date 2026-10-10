@@ -39,7 +39,7 @@ class TuyaLocateTest {
     fun anImportedDeviceWithNoAddressIsFoundByItsBroadcast() = runTest {
         val dev = FakeTuyaDevice(host = "192.0.2.71", versionText = "3.4")
         val lan = FakeTuyaLan(dev).apply { broadcasts += broadcast("192.0.2.71", dev.id, "3.4") }
-        val tuya = TuyaConnector(lan, TuyaConfig(clock = { testScheduler.currentTime }))
+        val tuya = TuyaConnector(lan, TuyaConfig(clock = { testScheduler.currentTime }), scope = backgroundScope)
 
         tuya.open(ref(dev, address = "", version = "3.3")).use { s ->
             assertEquals("192.0.2.71", s.device.address)
@@ -52,7 +52,7 @@ class TuyaLocateTest {
     fun aDeviceThatMovedIsFoundAtItsNewAddress() = runTest {
         val dev = FakeTuyaDevice(host = "192.0.2.80", versionText = "3.3")
         val lan = FakeTuyaLan(dev).apply { broadcasts += broadcast("192.0.2.80", dev.id, "3.3") }
-        val tuya = TuyaConnector(lan, TuyaConfig(clock = { testScheduler.currentTime }))
+        val tuya = TuyaConnector(lan, TuyaConfig(clock = { testScheduler.currentTime }), scope = backgroundScope)
 
         tuya.open(ref(dev, address = "192.0.2.12")).use { s ->   // the old DHCP address answers nothing
             assertEquals("192.0.2.80", s.device.address)
@@ -63,7 +63,7 @@ class TuyaLocateTest {
     @Test
     fun aSwitchedOffDeviceWithNoAddressFailsClearly() = runTest {
         val dev = FakeTuyaDevice(host = "192.0.2.90")
-        val tuya = TuyaConnector(FakeTuyaLan(dev), TuyaConfig(clock = { testScheduler.currentTime }))
+        val tuya = TuyaConnector(FakeTuyaLan(dev), TuyaConfig(clock = { testScheduler.currentTime }), scope = backgroundScope)
         try {
             tuya.open(ref(dev, address = ""))
             fail("opened a device that never announced itself")

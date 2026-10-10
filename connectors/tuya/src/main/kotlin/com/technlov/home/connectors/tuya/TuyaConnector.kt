@@ -8,9 +8,15 @@ import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.DeviceSession
 import com.technlov.home.core.EventLog
 import com.technlov.home.core.LocalNetwork
+import com.technlov.home.core.error
 import com.technlov.home.core.info
 import com.technlov.home.core.trace
 import com.technlov.home.core.warn
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlin.coroutines.cancellation.CancellationException
 import org.json.JSONObject
@@ -25,6 +31,13 @@ data class TuyaConfig(
     /** How long [TuyaConnector.open] listens for a device's own broadcast when its address is unknown or stale
      *  (devices announce themselves about every 5 s). */
     val locateTimeoutMs: Long = 7_000,
+    /** An open session sends a HEART_BEAT after this long with nothing sent: devices drop an idle socket
+     *  (tinytuya's monitor uses 12 s, tuya-local 5 s). */
+    val heartbeatIntervalMs: Long = 10_000,
+    /** A connection that has heard nothing for this many heartbeat intervals is closed and opened again. */
+    val silentIntervals: Int = 3,
+    /** A dropped connection is reopened after 1 s, then 2, 4 ... up to this. */
+    val reconnectMaxDelayMs: Long = 60_000,
     val clock: () -> Long = System::currentTimeMillis,
 )
 
@@ -35,12 +48,21 @@ data class TuyaConfig(
  *
  * Discovery is passive: Tuya devices broadcast their presence on the LAN (UDP 6666/6667/6699), which tells us a
  * device's id, IP and protocol version -- but never its key, which is why [open] needs the key in [DeviceRef.extras].
+ *
+ * An open session keeps a live connection to its device (pushes, heartbeats, reconnects); that work runs in [scope].
+ * Tests pass their own scope (a test's background scope) so it runs on virtual time.
  */
 class TuyaConnector(
     private val transport: TuyaTransport = TcpTuyaTransport(),
     private val config: TuyaConfig = TuyaConfig(),
     private val log: EventLog = EventLog.None,
+    scope: CoroutineScope? = null,
 ) : Connector {
+    private val links: CoroutineScope = scope ?: CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineName("tuya-links") +
+            CoroutineExceptionHandler { _, e -> log.error(TuyaClient.SOURCE, "live connection error", e) },
+    )
+
     override val info = ConnectorInfo(
         id = ID,
         name = "Tuya devices",
@@ -165,22 +187,25 @@ class TuyaConnector(
             log = log,
         )
         val who = "${device.name} (${device.address})"
+        val session = TuyaSession(device, client, points, config, log, links)
+        var opened = false
         try {
-            client.connect()
-            val session = TuyaSession(device, client, points, config, log).also { it.prepare() }
+            session.start()
+            opened = true
             log.info(
                 TuyaClient.SOURCE,
                 "$who: opened (protocol $version, ${session.capabilities.size} capabilities, dev_type ${client.devType})",
             )
             return session
         } catch (e: TuyaProtocolException) {
-            client.close()
             log.warn(TuyaClient.SOURCE, "$who: open failed: ${e.message}")
             throw ConnectorException("${device.name}: ${e.message}", e)
         } catch (e: ConnectorException) {
-            client.close()
             log.warn(TuyaClient.SOURCE, "$who: open failed: ${e.message}")
             throw e
+        } finally {
+            // Whatever went wrong (a cancellation included), no socket or keep-alive may outlive a failed open.
+            if (!opened) session.close()
         }
     }
 

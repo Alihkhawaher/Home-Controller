@@ -6,6 +6,7 @@ import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.Keys
 import com.technlov.home.core.SetValue
 import com.technlov.home.core.Value
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,8 +16,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class TuyaConnectorTest {
-    private fun connector(lan: FakeTuyaLan, log: RecordingLog = RecordingLog(verbose = false)) =
-        TuyaConnector(lan, TuyaConfig(clock = { 1_000_000L }), log)
+    /** Sessions keep their live connection in the test's background scope: virtual time, cancelled at the end. */
+    private fun TestScope.connector(lan: FakeTuyaLan, log: RecordingLog = RecordingLog(verbose = false)) =
+        TuyaConnector(lan, TuyaConfig(clock = { 1_000_000L }), log, backgroundScope)
 
     private fun ref(dev: FakeTuyaDevice, version: String, extras: Map<String, String> = emptyMap()) = DeviceRef(
         connectorId = TuyaConnector.ID,
@@ -49,7 +51,7 @@ class TuyaConnectorTest {
     @Test fun fullFlow34() = runTest { fullFlow("3.4") }
     @Test fun fullFlow35() = runTest { fullFlow("3.5") }
 
-    private suspend fun fullFlow(version: String) {
+    private suspend fun TestScope.fullFlow(version: String) {
         val dev = FakeTuyaDevice(versionText = version)
         val lan = FakeTuyaLan(dev)
         val session = connector(lan).open(ref(dev, version))
