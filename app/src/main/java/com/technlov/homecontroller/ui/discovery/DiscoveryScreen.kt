@@ -55,6 +55,14 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -94,6 +102,7 @@ import com.technlov.homecontroller.net.Ipv4
 import com.technlov.homecontroller.ui.appViewModel
 import com.technlov.homecontroller.ui.asString
 import com.technlov.homecontroller.ui.categoryIcon
+import com.technlov.homecontroller.ui.onlineColor
 import com.technlov.homecontroller.ui.components.GroupCard
 import com.technlov.homecontroller.ui.components.IconBadge
 import com.technlov.homecontroller.ui.components.MessageEffect
@@ -108,6 +117,11 @@ fun DiscoveryScreen(onBack: () -> Unit, onOpenDevice: (DeviceKey) -> Unit, onPai
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(vm.messages, snackbar)
     var adding by remember { mutableStateOf<DeviceRef?>(null) }
+    val context = LocalContext.current
+    // The scanner (zxing, no Google services): it asks for the camera itself, only when the user taps Import.
+    val scanImport = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let(vm::importScanned)
+    }
 
     // Start looking straight away the first time the screen opens.
     LaunchedEffect(Unit) { if (!ui.hasScanned) vm.scan() }
@@ -153,6 +167,17 @@ fun DiscoveryScreen(onBack: () -> Unit, onOpenDevice: (DeviceKey) -> Unit, onPai
                     }
                 }
             }
+            item(key = "import") {
+                ImportEntryCard(onClick = {
+                    scanImport.launch(
+                        ScanOptions()
+                            .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                            .setPrompt(context.getString(R.string.import_scan_prompt))
+                            .setBeepEnabled(false)
+                            .setOrientationLocked(false),
+                    )
+                })
+            }
             if (onPairDevice != null) {
                 item(key = "pair") { PairEntryCard(onPairDevice) }
             }
@@ -173,6 +198,105 @@ fun DiscoveryScreen(onBack: () -> Unit, onOpenDevice: (DeviceKey) -> Unit, onPai
             },
         )
     }
+
+    if (ui.importing) ImportLookingDialog()
+    ui.importCandidates?.let { candidates ->
+        ImportReviewDialog(
+            candidates = candidates,
+            onToggle = vm::toggleImport,
+            onConfirm = vm::confirmImport,
+            onDismiss = vm::cancelImport,
+        )
+    }
+}
+
+@Composable
+private fun ImportEntryCard(onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.import_entry_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.import_entry_text), style = MaterialTheme.typography.bodyMedium)
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+private fun ImportLookingDialog() {
+    AlertDialog(
+        onDismissRequest = {},
+        confirmButton = {},
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(28.dp))
+                Spacer(Modifier.width(16.dp))
+                Text(stringResource(R.string.import_looking), style = MaterialTheme.typography.bodyLarge)
+            }
+        },
+    )
+}
+
+@Composable
+private fun ImportReviewDialog(
+    candidates: List<ImportCandidate>,
+    onToggle: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val chosen = candidates.count { it.selected }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.import_review_title)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.import_review_text),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                candidates.forEach { c ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggle(c.ref.id) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = c.selected, onCheckedChange = { onToggle(c.ref.id) })
+                        Icon(categoryIcon(c.ref.category), contentDescription = null)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.ref.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(if (c.seenOnWifi) R.string.import_seen else R.string.import_not_seen),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (c.seenOnWifi) onlineColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = chosen > 0) {
+                Text(pluralStringResource(R.plurals.import_add_n, chosen, chosen))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
 }
 
 @Composable

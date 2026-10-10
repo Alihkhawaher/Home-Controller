@@ -21,8 +21,8 @@ android {
         applicationId = "com.technlov.homecontroller"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -74,6 +74,7 @@ android {
 dependencies {
     implementation(project(":core"))
     implementation(project(":connectors:gree"))
+    implementation(project(":connectors:tuya"))
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
@@ -89,6 +90,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("androidx.datastore:datastore:1.1.1")
+    // QR scanner for "Import Tuya devices" (Apache-2.0, pure open source: no Google Play Services)
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")

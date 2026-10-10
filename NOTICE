@@ -7,6 +7,16 @@ The Gree connector relies on protocol research published by the open-source
 projects greeclimate (https://github.com/cmroche/greeclimate) and gree-remote
 (https://github.com/tomikaa87/gree-remote).
 
-Gree and other brand names are trademarks of their respective owners. Home
+The Tuya connector ports the Tuya local LAN protocol (framing, AES-ECB/GCM,
+session-key negotiation, discovery) from tinytuya
+(https://github.com/jasonacox/tinytuya), MIT License, Copyright (c) 2024 Jason Cox.
+The OWON PC321-TY energy-meter data-point map and the native timer formats
+(cycle, random, inching) come from tuya-local
+(https://github.com/make-all/tuya-local), MIT License, Copyright 2018 Nik Rolls,
+2026 Jason Rumney, 2022-2026 other contributors. Both MIT licenses permit this
+use provided the copyright and permission notices are kept; the full texts are
+at the links above.
+
+Gree, Tuya and other brand names are trademarks of their respective owners. Home
 Controller is an independent project and is not affiliated with or endorsed
 by any device maker.

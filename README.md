@@ -60,6 +60,7 @@ unplugged.
 | Family | Connector | Controls | Diagnostics |
 |---|---|---|---|
 | **Gree Wi-Fi air conditioners**<br>Gree, and Gree-made units sold under other brands that use the Gree+ or EWPE Smart app | [`gree`](docs/connectors/gree.md) | Power, mode (auto, cool, dry, fan, heat), target temperature (16-30 °C), fan speed (auto and five levels), vertical and horizontal swing, display light, turbo, quiet, sleep, ioniser (health), X-Fan | Room temperature, fault code, filter reminder, module firmware, unit clock |
+| **Tuya Wi-Fi plugs, switches and energy meters**<br>Tuya-made devices under any brand that use the Tuya Smart or Smart Life app (protocol 3.3, 3.4, 3.5) | [`tuya`](docs/connectors/tuya.md) | Power, countdown, power-on state, LED mode, child lock, over-charge cutoff, and the device's own cycle, random and inching timers (stored on the device, so they run with no internet) | Live power, current, voltage, energy; 3-phase meters (OWON PC321-TY): per-phase voltage, current, power, power factor, energy, frequency |
 
 More families are on the [roadmap](#roadmap). Want one sooner? [Request a connector](https://github.com/Alihkhawaher/Home-Controller/issues/new?template=connector_request.yml)
 or [write one](docs/writing-a-connector.md).
@@ -228,10 +229,13 @@ please follow the [code of conduct](CODE_OF_CONDUCT.md). Report security issues 
 - [greeclimate](https://github.com/cmroche/greeclimate) by cmroche and
   [gree-remote](https://github.com/tomikaa87/gree-remote) by tomikaa87 documented the Gree local protocol. The Gree
   connector would not exist without their work.
+- [tinytuya](https://github.com/jasonacox/tinytuya) by Jason Cox: the Tuya connector's LAN protocol is ported from it.
+- [tuya-local](https://github.com/make-all/tuya-local) by Nik Rolls, Jason Rumney and contributors: verified data-point maps
+  (OWON PC321-TY) and real Tuya-app captures of the native timer formats.
 - The connector and capability model follows the idea of [Home Assistant](https://www.home-assistant.io/)'s
   integrations and entities, moved onto the phone.
 
-Gree and other brand names are trademarks of their owners. Home Controller is an independent project and is not
+Gree, Tuya and other brand names are trademarks of their owners. Home Controller is an independent project and is not
 affiliated with or endorsed by any device maker.
 
 ## License

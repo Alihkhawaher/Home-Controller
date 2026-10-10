@@ -19,5 +19,6 @@ rootProject.name = "Home-Controller"
 include(":core")
 // Connectors (plugins): one module each. Add a new device family here and in app/build.gradle.kts.
 include(":connectors:gree")
+include(":connectors:tuya")
 // The Android app.
 include(":app")

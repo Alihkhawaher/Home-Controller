@@ -10,7 +10,10 @@ import com.technlov.home.core.LocalNetwork
 import com.technlov.home.core.key
 import com.technlov.homecontroller.AppContainer
 import com.technlov.homecontroller.R
+import com.technlov.home.connectors.tuya.TuyaConnector
+import com.technlov.home.connectors.tuya.TuyaImport
 import com.technlov.homecontroller.data.Room
+import com.technlov.homecontroller.data.SecretBox
 import com.technlov.homecontroller.diag.LogSource
 import com.technlov.home.core.info
 import com.technlov.home.core.warn
@@ -47,6 +50,9 @@ data class ConnectorScan(
     val issue: UiText? = null,
 )
 
+/** One device from an import QR, before the user confirms it. [seenOnWifi]: it announced itself just now. */
+data class ImportCandidate(val ref: DeviceRef, val seenOnWifi: Boolean, val selected: Boolean = true)
+
 data class DiscoveryUi(
     val scanning: Boolean = false,
     val hasScanned: Boolean = false,
@@ -57,6 +63,10 @@ data class DiscoveryUi(
     val rooms: List<Room> = emptyList(),
     val lookingUp: Boolean = false,
     val lookupIssue: UiText? = null,
+    /** Looking for the imported devices on the Wi-Fi. */
+    val importing: Boolean = false,
+    /** Non-null while the user reviews an import. */
+    val importCandidates: List<ImportCandidate>? = null,
 ) {
     val foundCount: Int get() = scans.sumOf { it.found.size }
 }
@@ -206,8 +216,96 @@ class DiscoveryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun clearLookupIssue() = state.update { it.copy(lookupIssue = null) }
 
+    // ---- import from the PC (a QR with each Tuya device's id, key and data-point spec) ----
+
+    /**
+     * Reads an import QR, then listens for the devices' own broadcasts so each one gets its current address and
+     * protocol version. Devices that are switched off are kept too: the hub finds them when they come online.
+     * The keys stay in memory until [confirmImport] seals them; nothing about them is logged.
+     */
+    fun importScanned(text: String) {
+        if (state.value.importing) return
+        val refs = try {
+            TuyaImport.parse(text)
+        } catch (e: Exception) {
+            _messages.tryEmit(UiMessage(UiText.res(R.string.import_invalid)))
+            return
+        }
+        if (refs.isEmpty()) {
+            _messages.tryEmit(UiMessage(UiText.res(R.string.import_invalid)))
+            return
+        }
+        viewModelScope.launch {
+            state.update { it.copy(importing = true) }
+            val seen: Map<String, DeviceRef> = try {
+                withContext(Dispatchers.IO) { container.network.prepare() }
+                val tuya = container.registry[TuyaConnector.ID]
+                if (tuya == null) emptyMap() else container.network.withMulticastLock {
+                    withContext(Dispatchers.IO) { tuya.discover(LocalNetwork("255.255.255.255", ""), IMPORT_LISTEN_MS) }
+                }.associateBy { it.id }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                container.eventLog.warn(LogSource.DISCOVERY, "import: could not listen for the devices", e)
+                emptyMap()
+            }
+            val candidates = refs.map { r ->
+                val hit = seen[r.id]
+                val version = hit?.extras?.get(TuyaConnector.EXTRA_VERSION)
+                val ref = if (hit == null) r else r.copy(
+                    address = hit.address,
+                    extras = if (version != null) r.extras + (TuyaConnector.EXTRA_VERSION to version) else r.extras,
+                )
+                ImportCandidate(ref, seenOnWifi = hit != null)
+            }
+            container.eventLog.info(
+                LogSource.DISCOVERY,
+                "import: ${refs.size} device(s) in the QR, ${candidates.count { it.seenOnWifi }} on this Wi-Fi now",
+            )
+            state.update { it.copy(importing = false, importCandidates = candidates) }
+        }
+    }
+
+    fun toggleImport(id: String) = state.update { s ->
+        s.copy(importCandidates = s.importCandidates?.map { if (it.ref.id == id) it.copy(selected = !it.selected) else it })
+    }
+
+    fun cancelImport() = state.update { it.copy(importCandidates = null) }
+
+    /** Saves the chosen devices with their keys SEALED (Android Keystore); the plaintext is never written. */
+    fun confirmImport() {
+        val chosen = state.value.importCandidates.orEmpty().filter { it.selected }
+        state.update { it.copy(importCandidates = null) }
+        if (chosen.isEmpty()) return
+        viewModelScope.launch {
+            var added = 0
+            for (c in chosen) {
+                try {
+                    container.repository.addDevice(sealSecrets(c.ref), c.ref.name, null)
+                    added++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    container.eventLog.warn(LogSource.DISCOVERY, "import: could not save ${c.ref.name}", e)
+                }
+            }
+            container.eventLog.info(LogSource.DISCOVERY, "import: $added device(s) added")
+            _messages.tryEmit(UiMessage(UiText.plural(R.plurals.message_devices_imported, added, added)))
+        }
+    }
+
+    private fun sealSecrets(ref: DeviceRef): DeviceRef {
+        val key = ref.extras[TuyaConnector.EXTRA_LOCAL_KEY] ?: return ref
+        return ref.copy(
+            extras = ref.extras - TuyaConnector.EXTRA_LOCAL_KEY +
+                (TuyaConnector.EXTRA_LOCAL_KEY + SecretBox.SEALED_SUFFIX to SecretBox.seal(key)),
+        )
+    }
+
     private companion object {
         const val DISCOVERY_TIMEOUT_MS = 4_000L
         const val MIN_SCAN_MS = 2_400L
+        /** Tuya devices announce themselves about every 5 s. */
+        const val IMPORT_LISTEN_MS = 7_000L
     }
 }

@@ -392,4 +392,23 @@
     <string name="diagnostics_clear">Clear log</string>
     <string name="diagnostics_clear_title">Clear the log?</string>
     <string name="diagnostics_clear_text">Everything logged so far is deleted from this phone.</string>
+
+    <!-- Import from the PC (one QR with each Tuya device's id, key and data points) -->
+    <string name="import_entry_title">Import Tuya devices</string>
+    <string name="import_entry_text">Scan the QR code your PC shows: brings in each plug and meter with its key. Nothing goes through the cloud.</string>
+    <string name="import_scan_prompt">Scan the import QR code on your PC screen</string>
+    <string name="import_looking">Looking for the devices on your Wi-Fi…</string>
+    <string name="import_review_title">Add these devices?</string>
+    <string name="import_review_text">Their keys are stored encrypted on this phone.</string>
+    <string name="import_seen">On this Wi-Fi now</string>
+    <string name="import_not_seen">Not seen now: found when it is switched on</string>
+    <string name="import_invalid">That QR code is not a Home Controller import.</string>
+    <plurals name="import_add_n">
+        <item quantity="one">Add %d device</item>
+        <item quantity="other">Add %d devices</item>
+    </plurals>
+    <plurals name="message_devices_imported">
+        <item quantity="one">%d device added to your home</item>
+        <item quantity="other">%d devices added to your home</item>
+    </plurals>
 </resources>

@@ -14,9 +14,13 @@ import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.DeviceThermostat
 import androidx.compose.material.icons.rounded.DevicesOther
+import androidx.compose.material.icons.rounded.ElectricBolt
+import androidx.compose.material.icons.rounded.EnergySavingsLeaf
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Outlet
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.NightsStay
@@ -118,7 +122,28 @@ fun capabilityIcon(key: String): ImageVector = when (key) {
     "timer_off" -> Icons.Rounded.TimerOff
     "night_mode" -> Icons.Rounded.NightsStay
     "color_temperature" -> Icons.Rounded.Palette
-    else -> Icons.Rounded.Tune
+    // Tuya plug and meter keys
+    "cur_power" -> Icons.Rounded.Bolt
+    "cur_voltage" -> Icons.Rounded.ElectricBolt
+    "cur_current" -> Icons.Rounded.Speed
+    "add_ele" -> Icons.Rounded.EnergySavingsLeaf
+    "countdown_1", "switch_inching" -> Icons.Rounded.Timer
+    "cycle_time" -> Icons.Rounded.Autorenew
+    "random_time" -> Icons.Rounded.Schedule
+    "relay_status" -> Icons.Rounded.PowerSettingsNew
+    "light_mode" -> Icons.Rounded.Lightbulb
+    "overcharge_switch" -> Icons.Rounded.Bolt
+    else -> when {
+        // Tuya per-product meter codes (phase_a_power, power_total, energy_total...) and any custom dp.
+        key.contains("energy") -> Icons.Rounded.EnergySavingsLeaf
+        key.contains("power") -> Icons.Rounded.Bolt
+        key.contains("voltage") -> Icons.Rounded.ElectricBolt
+        key.contains("current") -> Icons.Rounded.Speed
+        key.contains("frequency") -> Icons.Rounded.Speed
+        key.contains("temperature") -> Icons.Rounded.DeviceThermostat
+        key.startsWith("switch") -> Icons.Rounded.Outlet
+        else -> Icons.Rounded.Tune
+    }
 }
 
 private val numberFormat: NumberFormat

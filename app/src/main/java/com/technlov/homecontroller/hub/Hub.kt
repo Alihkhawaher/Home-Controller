@@ -17,6 +17,7 @@ import com.technlov.home.core.warn
 import com.technlov.home.core.key
 import com.technlov.homecontroller.data.HomeData
 import com.technlov.homecontroller.data.HomeRepository
+import com.technlov.homecontroller.data.SecretBox
 import com.technlov.homecontroller.data.SavedDevice
 import com.technlov.homecontroller.diag.LogSource
 import kotlinx.coroutines.CancellationException
@@ -281,9 +282,11 @@ class Hub(
     private suspend fun openSession(slot: Slot): DeviceSession {
         val ref = slot.ref
         val connector = registry[ref.connectorId] ?: throw MissingConnectorException(ref.connectorId)
-        log.trace(LogSource.HUB) { "${slot.name}: opening a session at ${ref.address}" }
-        val session = connector.open(ref)
+        log.trace(LogSource.HUB) { "${slot.name}: opening a session at ${ref.address.ifEmpty { "(address to be found)" }}" }
+        // Secrets are stored sealed; the connector gets them in clear, in memory only.
+        val session = connector.open(ref.copy(extras = SecretBox.unsealExtras(ref.extras)))
         slot.session = session
+        rememberWhereItIs(slot, ref, session.device)
         val capabilities = session.capabilities
         log.info(LogSource.HUB, "${slot.name}: connected at ${ref.address} (${capabilities.size} capabilities)")
         if (capabilities != slot.view.capabilities) {
@@ -297,6 +300,25 @@ class Hub(
             }
         }
         return session
+    }
+
+    /**
+     * The connector may have found the device at a new address (DHCP moved it, or an imported device had none yet)
+     * or learned something non-secret such as its protocol version: keep that, but never a plaintext secret.
+     */
+    private suspend fun rememberWhereItIs(slot: Slot, stored: DeviceRef, used: DeviceRef) {
+        val extras = stored.extras + SecretBox.withoutPlaintext(used.extras, stored.extras)
+        if (used.address == stored.address && extras == stored.extras) return
+        val updated = stored.copy(address = used.address, extras = extras)
+        slot.ref = updated
+        log.info(LogSource.HUB, "${slot.name}: found at ${used.address}")
+        try {
+            repository.refreshDeviceRef(updated)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The session works at the new address either way; it is found again next time if this save failed.
+        }
     }
 
     private fun onSuccess(slot: Slot, state: DeviceState) {

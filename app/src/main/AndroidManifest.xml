@@ -4,6 +4,9 @@
 
     <!-- Local network only: talk to devices on the Wi-Fi, find the Wi-Fi's address, receive discovery replies. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Only for "Import Tuya devices" (QR scan); asked when the user taps it. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
@@ -83,5 +86,10 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- zxing's scanner screen, allowed to follow the phone's orientation. -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
     </application>
 </manifest>

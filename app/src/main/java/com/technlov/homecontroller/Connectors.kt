@@ -1,6 +1,7 @@
 package com.technlov.homecontroller
 
 import com.technlov.home.connectors.gree.GreeConnector
+import com.technlov.home.connectors.tuya.TuyaConnector
 import com.technlov.home.core.ConnectorRegistry
 import com.technlov.home.core.EventLog
 
@@ -11,5 +12,5 @@ import com.technlov.home.core.EventLog
  */
 object Connectors {
     fun registry(log: EventLog): ConnectorRegistry =
-        ConnectorRegistry(listOf(GreeConnector(log = log)) + buildTypeConnectors())
+        ConnectorRegistry(listOf(GreeConnector(log = log), TuyaConnector(log = log)) + buildTypeConnectors())
 }
