@@ -256,6 +256,7 @@ fun SettingsScreen(
                             weekendText(weekend)
                         },
                         onClick = { pickWeekend = true },
+                        maxLines = 2,
                     )
                 }
             }
