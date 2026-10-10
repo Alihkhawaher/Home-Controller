@@ -5,6 +5,8 @@ import androidx.compose.material.icons.automirrored.rounded.Input
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.AirlineSeatReclineNormal
+import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Park
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Security
@@ -144,6 +146,10 @@ fun capabilityIcon(key: String): ImageVector = when (key) {
     // Gree extras
     "fresh_air" -> Icons.Rounded.Park
     "steady_heat" -> Icons.Rounded.LocalFireDepartment
+    "beep" -> Icons.Rounded.NotificationsActive
+    "anti_direct_blow" -> Icons.Rounded.AirlineSeatReclineNormal
+    "auto_display_light" -> Icons.Rounded.BrightnessAuto
+    "humidity" -> Icons.Rounded.WaterDrop
     // Tuya alarm host and smoke alarm (before the "switch*" fallback below, which means a plug outlet)
     "master_mode" -> Icons.Rounded.Security
     "master_state", "switch_alarm_propel" -> Icons.Rounded.NotificationsActive
