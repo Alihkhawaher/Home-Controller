@@ -1,5 +1,16 @@
 package com.technlov.homecontroller.ui.device
 
+import java.time.ZoneId
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.delay
+import com.technlov.homecontroller.history.PowerHistoryUi
+import com.technlov.homecontroller.history.HistoryRange
+import com.technlov.homecontroller.history.HistoryQuery
+import com.technlov.homecontroller.history.HistoryMath
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import com.technlov.homecontroller.data.PowerButton
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -72,6 +83,41 @@ class DeviceViewModel(private val container: AppContainer, private val key: Devi
     }
 
     /** Sends [changes]; the hub shows them at once and snaps back with a message if the device refuses. */
+    // ---- power history ----
+    private val historyRange = MutableStateFlow(HistoryRange.DAY_1)
+    private val _history = MutableStateFlow<PowerHistoryUi?>(null)
+    /** Null for a device with no power reading (no card at all). Reloaded every minute and on a range change. */
+    val history: StateFlow<PowerHistoryUi?> = _history.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            combine(historyRange, ui.map { it.capabilities }.distinctUntilChanged()) { r, caps -> r to caps }
+                .collectLatest { (range, caps) ->
+                    val plan = HistoryMath.plan(caps)
+                    if (plan.powerKey == null) {
+                        _history.value = null
+                        return@collectLatest
+                    }
+                    while (true) {
+                        _history.value = withContext(Dispatchers.IO) {
+                            runCatching {
+                                HistoryQuery.build(
+                                    range, System.currentTimeMillis(), ZoneId.systemDefault(), plan,
+                                    minutes = { m, f, t -> container.historyStore.minutes(key, m, f, t) },
+                                    hours = { m, f, t -> container.historyStore.hours(key, m, f, t) },
+                                )
+                            }.getOrNull()
+                        }
+                        delay(HISTORY_REFRESH_MS)
+                    }
+                }
+        }
+    }
+
+    fun setHistoryRange(range: HistoryRange) {
+        historyRange.value = range
+    }
+
     fun apply(changes: List<SetValue>, what: String) {
         viewModelScope.launch {
             container.hub.apply(key, changes).onFailure { error ->
@@ -127,7 +173,12 @@ class DeviceViewModel(private val container: AppContainer, private val key: Devi
     fun remove(onRemoved: () -> Unit) {
         viewModelScope.launch {
             container.repository.removeDevice(key)
+            runCatching { withContext(Dispatchers.IO) { container.historyStore.forget(key) } }
             onRemoved()
         }
+    }
+
+    private companion object {
+        const val HISTORY_REFRESH_MS = 60_000L
     }
 }

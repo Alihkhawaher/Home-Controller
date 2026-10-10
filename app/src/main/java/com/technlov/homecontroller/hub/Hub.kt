@@ -18,6 +18,7 @@ import com.technlov.home.core.key
 import com.technlov.homecontroller.data.HomeData
 import com.technlov.homecontroller.data.HomeRepository
 import com.technlov.homecontroller.data.SecretBox
+import com.technlov.homecontroller.history.HistorySink
 import com.technlov.homecontroller.data.SavedDevice
 import com.technlov.homecontroller.diag.LogSource
 import kotlinx.coroutines.CancellationException
@@ -72,6 +73,8 @@ class Hub(
     private val ioContext: CoroutineContext = Dispatchers.IO,
     /** Diagnostics: link changes, retries, poll summaries, automation runs. Never device keys. */
     private val log: EventLog = EventLog.None,
+    /** Power history: every successful reading is offered here (electrical readings are kept; the rest ignored). */
+    private val history: HistorySink = HistorySink.None,
 ) {
     private data class SlotView(
         val status: LinkStatus,
@@ -335,6 +338,7 @@ class Hub(
         slot.nextAttemptAt = 0
         slot.offlineSince = null
         slot.view = slot.view.copy(status = LinkStatus.ONLINE, state = state, issue = null, lastSeenMillis = now)
+        history.record(slot.ref.key(), slot.view.capabilities, state, now)
     }
 
     private fun onFailure(slot: Slot, error: Throwable) {

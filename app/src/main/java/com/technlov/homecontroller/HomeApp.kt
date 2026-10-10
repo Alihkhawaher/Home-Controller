@@ -11,6 +11,8 @@ import com.technlov.home.core.error
 import com.technlov.home.core.info
 import com.technlov.homecontroller.data.AppSettings
 import com.technlov.homecontroller.data.HomeDataStore
+import com.technlov.homecontroller.history.HistoryStore
+import com.technlov.homecontroller.history.HistoryRecorder
 import com.technlov.homecontroller.data.HomeRepository
 import com.technlov.homecontroller.diag.AppEventLog
 import com.technlov.homecontroller.diag.LogSource
@@ -77,6 +79,8 @@ class AppContainer(context: Context) {
     val wifiScanner = WifiScanner(context)
     val pairingPlatform = AndroidPairingPlatform(context, network, wifiScanner, eventLog)
     val notifications = HubNotifications(context)
+    /** Power history: readings kept on the phone (minutes for 2 days, hours for 400 days). */
+    val historyStore = HistoryStore(context)
     val hub = Hub(
         registry = registry,
         repository = repository,
@@ -84,6 +88,7 @@ class AppContainer(context: Context) {
         events = notifications,
         beforeNetworkUse = { network.prepare() },
         log = eventLog,
+        history = HistoryRecorder(historyStore, scope, eventLog),
     )
 
     /** Null until the saved data has been read once (the splash screen waits for it). */

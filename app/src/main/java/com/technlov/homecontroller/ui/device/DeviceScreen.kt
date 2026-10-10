@@ -66,6 +66,8 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import com.technlov.homecontroller.data.PowerButton
+import com.technlov.homecontroller.history.PowerHistoryUi
+import com.technlov.homecontroller.history.HistoryRange
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -114,6 +116,7 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
     val vm = appViewModel(key = "device:$deviceKey") { DeviceViewModel(it, deviceKey) }
     val ui by vm.ui.collectAsState()
     val retrying by vm.retrying.collectAsState()
+    val history by vm.history.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(vm.messages, snackbar)
     var dialog by rememberSaveable { mutableStateOf<DeviceDialog?>(null) }
@@ -175,7 +178,10 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
                     vm.apply(changes, what)
                 }
             }
-            DeviceContent(ui, device, retrying, padding, onApply = guardedApply, onRetry = vm::retry)
+            DeviceContent(
+                ui, device, retrying, padding, onApply = guardedApply, onRetry = vm::retry,
+                history = history, onHistoryRange = vm::setHistoryRange,
+            )
         }
     }
 
@@ -360,6 +366,8 @@ private fun DeviceContent(
     padding: PaddingValues,
     onApply: (List<SetValue>, String) -> Unit,
     onRetry: () -> Unit,
+    history: PowerHistoryUi?,
+    onHistoryRange: (HistoryRange) -> Unit,
 ) {
     val caps = ui.capabilities
     val state = ui.state
@@ -460,6 +468,14 @@ private fun DeviceContent(
                             ReadingRow(capabilityIcon(reading.key), reading.label, valueText(reading, state?.values?.get(reading.key)))
                         }
                     }
+                }
+            }
+        }
+        if (history != null) {
+            item(key = "history") {
+                Column {
+                    SectionHeader(stringResource(R.string.history_title))
+                    PowerHistoryCard(history, onHistoryRange)
                 }
             }
         }

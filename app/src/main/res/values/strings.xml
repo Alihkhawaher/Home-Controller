@@ -426,4 +426,20 @@
     <string name="power_confirm_text">This device asks before its power changes. Change that in its menu: Power button.</string>
     <string name="action_turn_on">Turn on</string>
     <string name="action_turn_off">Turn off</string>
+
+    <!-- Power history -->
+    <string name="history_title">Power history</string>
+    <string name="history_range_day">24 h</string>
+    <string name="history_range_week">7 days</string>
+    <string name="history_range_month">30 days</string>
+    <string name="history_now">Now</string>
+    <string name="history_peak">Peak</string>
+    <string name="history_today">Today</string>
+    <string name="history_month">This month</string>
+    <string name="history_power_axis">Power · up to %1$s</string>
+    <string name="history_energy_hourly">Energy per hour · up to %1$s</string>
+    <string name="history_energy_daily">Energy per day · up to %1$s</string>
+    <string name="history_collecting">Collecting readings: the phone keeps them while it is on this Wi-Fi with the hub running. The first points appear within a minute.</string>
+    <string name="history_note_counter">Energy from the meter’s own counter: exact, even for times the phone was away.</string>
+    <string name="history_note_power">Energy worked out from power readings while the phone was home; times it was away are left out.</string>
 </resources>

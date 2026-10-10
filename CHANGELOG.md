@@ -4,6 +4,19 @@ All notable changes to Home Controller are recorded in this file. The format fol
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.4.0 — 2026-10-10
+
+### Added
+
+- Power history on the phone: every device with a power reading gets a "Power history" card -- 24 hours,
+  7 days or 30 days; the power line (gaps shown as gaps, not joined), energy per hour or per day, and now / peak /
+  today / this month. The hub keeps power, voltage, current and energy readings once a minute: minute detail for
+  2 days, hourly summaries for 400 days, in a private SQLite file. No server, no cloud.
+- Energy is exact for devices with their own counter (a 3-phase meter's total -- right even for hours the phone
+  was away); for plugs it is worked out from power readings, and times the phone was away are left out rather
+  than guessed.
+- Removing a device also removes its history.
+
 ## 0.3.1 — 2026-10-10
 
 ### Added
