@@ -13,6 +13,7 @@ import com.technlov.home.core.info
 import com.technlov.home.core.trace
 import com.technlov.home.core.warn
 import kotlinx.coroutines.delay
+import java.util.concurrent.ConcurrentHashMap
 
 /** Tuning for [GreeConnector]. The defaults suit a home Wi-Fi with a unit or two on a weak link. */
 data class GreeConfig(
@@ -23,8 +24,14 @@ data class GreeConfig(
     val tries: Int = 4,
     /** Sends per command; re-sent only when no reply arrived. */
     val commandTries: Int = 2,
-    /** Sends per diagnostics request (best effort, so fewer). */
+    /** Sends per diagnostics request (best effort, so fewer). Also used for the optional columns. */
     val diagnosticsTries: Int = 2,
+    /**
+     * Sends of the probe for the newer optional columns at open. One: a module that is silent to names it does not
+     * know would make every open wait [requestTimeoutMs] per send; a lost probe only hides those few controls until
+     * the next open.
+     */
+    val probeTries: Int = 1,
     /** Read the diagnostic columns (fault, filter, firmware, clock) at most this often. */
     val diagnosticsEveryMs: Long = 5 * 60_000L,
     /** Discovery also sends a unicast scan to every address of the /24 (broadcast frames get lost on Wi-Fi). */
@@ -75,6 +82,13 @@ class GreeConnector(
     )
 
     override val provisioning: GreeProvisioning = GreeProvisioning(log)
+
+    /**
+     * "Beep on commands" choices made while this connector runs (unit id -> on), so a session opened again (after the
+     * unit went silent, say) keeps the choice even before the app has saved it with the device. [open] puts it in the
+     * session's [DeviceRef.extras], which the app saves when it opens a session.
+     */
+    private val beepChoices = ConcurrentHashMap<String, Boolean>()
 
     /** Where discovery sends its scans. Known hosts never repeat in [sweep]. */
     internal data class DiscoveryPlan(val known: List<String>, val broadcast: String?, val sweep: List<String>) {
@@ -227,15 +241,18 @@ class GreeConnector(
                 )
             }
             client.bind()
+            // A beep choice made since this connector started is newer than the one saved with the device.
+            val beep = beepChoices[found.id]?.let { EXTRA_BEEP to beepExtra(it) }
             val ref = device.copy(
                 firmware = found.firmware ?: device.firmware,
-                extras = device.extras + mapOf(EXTRA_CIPHER to client.cipher.toString(), EXTRA_MAC to found.mac),
+                extras = device.extras + mapOf(EXTRA_CIPHER to client.cipher.toString(), EXTRA_MAC to found.mac) +
+                    listOfNotNull(beep),
             )
-            val session = GreeSession(ref, client, config, log).also { it.prepare() }
+            val session = GreeSession(ref, client, config, log) { beepChoices[found.id] = it }.also { it.prepare() }
             log.info(
                 GreeClient.SOURCE,
                 "$who: opened (cipher v${client.cipher}, firmware ${ref.firmware ?: "?"}, " +
-                    "${session.capabilities.size} capabilities)",
+                    "${session.capabilities.size} capabilities${if (beepFrom(ref.extras)) "" else ", beep off"})",
             )
             return session
         } catch (e: GreeProtocolException) {
@@ -253,6 +270,16 @@ class GreeConnector(
         /** Non-secret extras kept on the [DeviceRef]: the cipher version and the MAC as the unit spells it. */
         const val EXTRA_CIPHER = "cipher"
         const val EXTRA_MAC = "mac"
+
+        /**
+         * "Beep on commands" ([GreeKeys.BEEP]) for this unit: "0" off, "1" on, absent = on (the unit's normal
+         * behaviour). The app's setting for the commands it sends, kept with the device; not a secret.
+         */
+        const val EXTRA_BEEP = "beep"
+
+        internal fun beepFrom(extras: Map<String, String>): Boolean = extras[EXTRA_BEEP]?.trim() != "0"
+
+        internal fun beepExtra(on: Boolean): String = if (on) "1" else "0"
 
         private val PREFIX = Regex("""^(\d{1,3}\.){3}$""")
 

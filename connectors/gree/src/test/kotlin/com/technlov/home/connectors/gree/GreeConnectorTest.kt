@@ -57,7 +57,7 @@ class GreeConnectorTest {
         assertEquals(cipher.toString(), ref.extras[GreeConnector.EXTRA_CIPHER])
 
         val session = gree.open(ref)
-        assertEquals(24, session.capabilities.size)   // 20 + the 4 extras the fake answers
+        assertEquals(25, session.capabilities.size)   // 20 + the 4 extras the fake answers + beep on commands
         assertEquals(cipher.toString(), session.device.extras[GreeConnector.EXTRA_CIPHER])
 
         val s1 = session.read()

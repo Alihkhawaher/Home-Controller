@@ -95,9 +95,11 @@ class GreeExtrasTest {
             s.read()
             s.apply(listOf(SetValue(Keys.POWER, Value.Bool(true))))
             val requests = statusRequests(unit)
-            val allowed = listOf(GreeModel.STATUS_COLUMNS, GreeModel.DIAGNOSTIC_COLUMNS, GreeModel.EXTRA_COLUMNS)
+            val allowed = listOf(
+                GreeModel.STATUS_COLUMNS, GreeModel.DIAGNOSTIC_COLUMNS, GreeModel.EXTRA_COLUMNS, GreeModel.PROBE_COLUMNS,
+            )
             assertTrue(requests.toString(), requests.all { it in allowed })
-            assertTrue(requests.filter { "Pow" in it }.none { cols -> cols.any { it in GreeModel.EXTRA_COLUMNS } })
+            assertTrue(requests.filter { "Pow" in it }.none { cols -> cols.any { it in GreeModel.OPTIONAL_COLUMNS } })
             assertEquals(listOf("ChildLock", "TmrOn", "TmrOff", "Defrost"), GreeModel.EXTRA_COLUMNS)
             assertTrue(GreeModel.STATUS_COLUMNS.none { it in GreeModel.EXTRA_COLUMNS })
         }

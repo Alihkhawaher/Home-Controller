@@ -23,8 +23,20 @@ class FakeGreeUnit(
         "ChildLock" to 0, "TmrOn" to 0, "TmrOff" to 0, "Defrost" to 0,
     )
 
-    /** Columns this unit does not know (it leaves them out of a status reply). */
+    /**
+     * Columns this unit does not know: it leaves them out of a status reply, and a command naming them is still taken
+     * (r 200) with them ignored -- echoed back as sent, the way real modules confirm, unless [echoUnknownInCmd] is off.
+     */
     val unknownColumns = mutableSetOf<String>()
+
+    /** Whether a command reply echoes the [unknownColumns] it ignored (real modules do), or leaves them out. */
+    var echoUnknownInCmd = true
+
+    /** The newer optional columns ([GreeModel.PROBE_COLUMNS]) with sample values, for units that have them. */
+    fun withProbeColumns(vararg except: String): FakeGreeUnit = apply {
+        val sample = linkedMapOf<String, Any>("AntiDirectBlow" to 0, "LigSen" to 1, "OutEnvTem" to 75, "DwatSen" to 55)
+        state.putAll(sample.filterKeys { it !in except })
+    }
 
     /** A status request naming any of these gets no reply at all (like the old module and a long unknown list). */
     val silentOnColumns = mutableSetOf<String>()
@@ -99,9 +111,14 @@ class FakeGreeUnit(
                 val values = p.getJSONArray("p")
                 val names = (0 until opt.length()).map { opt.getString(it) }
                 val vals = (0 until values.length()).map { values.getInt(it) }
-                names.zip(vals).forEach { (k, v) -> state[k] = v }
+                val taken = names.zip(vals).filter { (k, _) -> k !in unknownColumns }
+                taken.forEach { (k, v) -> state[k] = v }
+                val echoed = if (echoUnknownInCmd) names.zip(vals) else taken
                 reply(
-                    linkedMapOf("t" to "res", "mac" to mac, "r" to 200, "opt" to names, "p" to vals, "val" to vals),
+                    linkedMapOf(
+                        "t" to "res", "mac" to mac, "r" to 200, "opt" to echoed.map { it.first },
+                        "p" to echoed.map { it.second }, "val" to echoed.map { it.second },
+                    ),
                     unitKey.toByteArray(),
                     i = 0,
                 )

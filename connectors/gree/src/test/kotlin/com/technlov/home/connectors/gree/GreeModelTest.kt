@@ -90,7 +90,7 @@ class GreeModelTest {
                 Keys.POWER, Keys.MODE, Keys.TARGET_TEMPERATURE, Keys.CURRENT_TEMPERATURE, Keys.FAN_SPEED,
                 Keys.SWING_VERTICAL, Keys.SWING_HORIZONTAL, Keys.DISPLAY_LIGHT, GreeKeys.TURBO, GreeKeys.QUIET,
                 GreeKeys.SLEEP, GreeKeys.HEALTH, GreeKeys.X_FAN, GreeKeys.FRESH_AIR, GreeKeys.STEADY_HEAT,
-                GreeKeys.ENERGY_SAVING, Keys.FAULT, Keys.FIRMWARE, GreeKeys.CLEAN_FILTER, GreeKeys.CLOCK,
+                GreeKeys.ENERGY_SAVING, Keys.FAULT, Keys.FIRMWARE, GreeKeys.CLEAN_FILTER, GreeKeys.CLOCK, GreeKeys.BEEP,
             ),
             caps.map { it.key },
         )
@@ -108,6 +108,9 @@ class GreeModelTest {
         assertEquals("Fresh air", byKey[GreeKeys.FRESH_AIR]!!.label)
         assertEquals("8 °C frost protection", byKey[GreeKeys.STEADY_HEAT]!!.label)
         assertTrue(byKey[GreeKeys.ENERGY_SAVING] is Capability.Toggle)
+        val beep = byKey[GreeKeys.BEEP] as Capability.Toggle
+        assertEquals("Beep on commands", beep.label)
+        assertTrue(beep.writable)
         for (k in listOf(Keys.FAULT, Keys.FIRMWARE, GreeKeys.CLEAN_FILTER, GreeKeys.CLOCK)) {
             assertTrue(k, (byKey[k] as Capability.Reading).diagnostic)
         }
@@ -121,7 +124,7 @@ class GreeModelTest {
         assertFalse(Keys.SWING_HORIZONTAL in keys)
         assertFalse(GreeKeys.QUIET in keys)
         assertTrue(Keys.SWING_VERTICAL in keys)
-        assertEquals(20, GreeModel.capabilities(emptySet()).size)
+        assertEquals(21, GreeModel.capabilities(emptySet()).size)   // the 20 status / diagnostic ones + beep
         // a unit without fresh air / frost protection / energy saving does not show those switches
         val basic = GreeModel.capabilities(answered - "Air" - "StHt" - "SvSt").map { it.key }
         assertFalse(GreeKeys.FRESH_AIR in basic)
