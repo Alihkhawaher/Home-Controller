@@ -150,7 +150,7 @@ private fun AutomationCard(
             ) {
                 Text(automation.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
-                Text(triggerSummary(automation.trigger, devices), style = MaterialTheme.typography.bodyMedium)
+                Text(triggerSummary(automation.trigger, devices, automation.runOnce), style = MaterialTheme.typography.bodyMedium)
                 automation.actions.forEach { action ->
                     Text(
                         actionSummary(action, devices),

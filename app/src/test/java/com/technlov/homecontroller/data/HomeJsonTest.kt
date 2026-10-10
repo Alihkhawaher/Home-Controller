@@ -13,6 +13,7 @@ import com.technlov.home.core.Value
 import com.technlov.homecontroller.climateCapabilities
 import com.technlov.homecontroller.exampleRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
@@ -61,6 +62,7 @@ class HomeJsonTest {
                 enabled = false,
                 trigger = Trigger.StateMatches("fake:ac-2", Keys.CURRENT_TEMPERATURE, Op.GE, Value.Num(30.0)),
                 actions = listOf(Action.Notify("Hot", "Office is above 30")),
+                runOnce = true,
             ),
         ),
         settings = AppSettings(
@@ -87,6 +89,15 @@ class HomeJsonTest {
         assertEquals(PowerButton.SHOW, HomeJson.decode(unknown).devices.single().powerButton)
         val hidden = """{"devices":[{"connectorId":"fake","id":"a","address":"192.0.2.9","name":"Plug","powerButton":"HIDE"}]}"""
         assertEquals(PowerButton.HIDE, HomeJson.decode(hidden).devices.single().powerButton)
+    }
+
+    @Test
+    fun automationsSavedBeforeRunOnceKeepRepeating() {
+        val old = """{"automations":[{"id":"a","name":"n","trigger":{"type":"time","hour":7,"minute":0},
+            "actions":[{"type":"notify","title":"t","text":"x"}]}]}"""
+        val automation = HomeJson.decode(old).automations.single()
+        assertFalse(automation.runOnce)
+        assertTrue(automation.enabled)
     }
 
     @Test

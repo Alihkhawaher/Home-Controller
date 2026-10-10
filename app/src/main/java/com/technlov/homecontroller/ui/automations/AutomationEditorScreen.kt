@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -214,17 +215,20 @@ fun AutomationEditorScreen(automationId: String?, onDone: () -> Unit, prefillDev
             }
             item(key = "enabled") {
                 GroupCard {
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.automation_enabled)) },
-                        supportingContent = { Text(stringResource(R.string.automation_enabled_text)) },
-                        trailingContent = { Switch(checked = draft.enabled, onCheckedChange = null) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier.toggleable(
-                            value = draft.enabled,
-                            role = Role.Switch,
-                            onValueChange = { enabled -> update { it.copy(enabled = enabled) } },
-                        ),
+                    SwitchListRow(
+                        title = stringResource(R.string.automation_enabled),
+                        text = stringResource(R.string.automation_enabled_text),
+                        checked = draft.enabled,
+                    ) { enabled -> update { it.copy(enabled = enabled) } }
+                    HorizontalDivider(
+                        Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     )
+                    SwitchListRow(
+                        title = stringResource(R.string.automation_run_once),
+                        text = stringResource(R.string.automation_run_once_text),
+                        checked = draft.runOnce,
+                    ) { once -> update { it.copy(runOnce = once) } }
                 }
             }
             draft.problem()?.let { problem ->
@@ -281,6 +285,17 @@ private fun autoName(draft: AutomationDraft, devices: List<DeviceOption>): Strin
     TriggerKind.DEVICE -> stringResource(
         R.string.automation_auto_name_state,
         devices.firstOrNull { it.key == draft.device }?.name ?: stringResource(R.string.automation_a_device),
+    )
+}
+
+@Composable
+private fun SwitchListRow(title: String, text: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(text) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
     )
 }
 

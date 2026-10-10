@@ -135,6 +135,7 @@ internal data class AutomationDto(
     val trigger: TriggerDto,
     val conditions: List<ConditionDto> = emptyList(),
     val actions: List<ActionDto> = emptyList(),
+    val runOnce: Boolean = false,
 )
 
 @Serializable
@@ -281,6 +282,7 @@ private fun Automation.toDto() = AutomationDto(
             is Action.Notify -> ActionDto.Notify(it.title, it.text)
         }
     },
+    runOnce = runOnce,
 )
 
 private fun AutomationDto.toModel() = Automation(
@@ -307,4 +309,5 @@ private fun AutomationDto.toModel() = Automation(
             is ActionDto.Notify -> Action.Notify(it.title, it.text)
         }
     },
+    runOnce = runOnce,
 )

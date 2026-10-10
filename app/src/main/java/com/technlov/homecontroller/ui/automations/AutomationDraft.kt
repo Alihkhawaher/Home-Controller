@@ -80,6 +80,8 @@ data class AutomationDraft(
     /** Kept as they are: the editor does not change conditions yet. */
     val conditions: List<Condition> = emptyList(),
     val actions: List<Action> = emptyList(),
+    /** Turns itself off after a successful run. */
+    val runOnce: Boolean = false,
 ) {
     fun problem(): DraftProblem? = when {
         kind == TriggerKind.DEVICE && (device == null || key == null) -> DraftProblem.NO_TRIGGER_DEVICE
@@ -101,7 +103,7 @@ data class AutomationDraft(
         val cleanActions = actions.map {
             if (it is Action.Notify) it.copy(title = it.title.trim().ifEmpty { finalName }, text = it.text.trim()) else it
         }
-        return Automation(id, finalName, enabled, trigger, conditions, cleanActions)
+        return Automation(id, finalName, enabled, trigger, conditions, cleanActions, runOnce)
     }
 
     companion object {
@@ -121,6 +123,7 @@ data class AutomationDraft(
                 enabled = automation.enabled,
                 conditions = automation.conditions,
                 actions = automation.actions,
+                runOnce = automation.runOnce,
             )
             return when (val t = automation.trigger) {
                 is Trigger.TimeOfDay -> base.copy(kind = TriggerKind.TIME, hour = t.hour, minute = t.minute, days = t.days)

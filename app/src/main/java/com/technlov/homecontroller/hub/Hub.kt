@@ -194,13 +194,18 @@ class Hub(
         }
     }
 
-    /** Runs an automation's actions now (the minute tick, or "Run now" in the editor). */
-    suspend fun execute(automation: Automation, data: HomeData? = null) {
+    /**
+     * Runs an automation's actions now (the minute tick, or "Run now" in the editor). Returns true when every device
+     * took its change; a notification never makes a run fail.
+     */
+    suspend fun execute(automation: Automation, data: HomeData? = null): Boolean {
         val names = data ?: repository.current()
         log.info(LogSource.HUB, "Automation \"${automation.name}\": running ${automation.actions.size} action(s)")
+        var allApplied = true
         for (action in automation.actions) {
             when (action) {
                 is Action.SetValues -> apply(action.device, action.changes).onFailure { error ->
+                    allApplied = false
                     val name = names.device(action.device)?.name ?: action.device
                     log.warn(LogSource.HUB, "Automation \"${automation.name}\": $name did not take the change")
                     runCatching { events.automationFailed(automation, name, DeviceIssue.from(error)) }
@@ -211,6 +216,7 @@ class Hub(
                 }
             }
         }
+        return allApplied
     }
 
     /** One automation pass for the minute [now]. Called every minute by [run]; public for tests. */
@@ -221,7 +227,24 @@ class Hub(
         previousStates = states
         for (automation in due) {
             _lastRuns.update { it + (automation.id to now) }
-            execute(automation, data)
+            val done = execute(automation, data)
+            if (automation.runOnce) finishRunOnce(automation, done)
+        }
+    }
+
+    /** "Run once": off after a run in which every device took its change; on after a failed one, to try again. */
+    private suspend fun finishRunOnce(automation: Automation, done: Boolean) {
+        if (!done) {
+            log.info(LogSource.HUB, "Automation \"${automation.name}\" (run once): not every change went through; it stays on")
+            return
+        }
+        try {
+            repository.setAutomationEnabled(automation.id, false)
+            log.info(LogSource.HUB, "Automation \"${automation.name}\" (run once): done, turned off")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(LogSource.HUB, "Automation \"${automation.name}\" (run once): could not turn it off", e)
         }
     }
 

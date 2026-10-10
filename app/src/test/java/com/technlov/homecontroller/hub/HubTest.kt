@@ -213,4 +213,49 @@ class HubTest {
         hub.tick(now.plusMinutes(1))
         assertTrue("previous states are handed to the engine", seenPrevious!!.containsKey(ac))
     }
+
+    // ---- run once ----
+
+    private val powerOn = Action.SetValues(ac, listOf(SetValue(Keys.POWER, Value.Bool(true))))
+
+    @Test
+    fun aRunOnceAutomationTurnsItselfOffAfterASuccessfulRun() = runTest {
+        hub.refresh()
+        val once = Automation("once", "Once", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn), runOnce = true)
+        val daily = Automation("daily", "Daily", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn))
+        repository.saveAutomation(once)
+        repository.saveAutomation(daily)
+        due = listOf(once, daily)
+
+        hub.tick(LocalDateTime.of(2026, 10, 10, 18, 0))
+
+        assertEquals(true, hub.live.value.getValue(ac).state!!.bool(Keys.POWER))
+        assertFalse("run once: off after it ran", store.value.automation("once")!!.enabled)
+        assertTrue("an ordinary automation stays on", store.value.automation("daily")!!.enabled)
+    }
+
+    @Test
+    fun aRunOnceAutomationStaysOnWhenADeviceDidNotTakeTheChange() = runTest {
+        hub.refresh()
+        connector.failApplies = true
+        val once = Automation("once", "Once", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn), runOnce = true)
+        repository.saveAutomation(once)
+        due = listOf(once)
+
+        hub.tick(LocalDateTime.of(2026, 10, 10, 18, 0))
+
+        assertEquals(listOf(Triple("Once", "Bedroom AC", DeviceIssue.Failed("refused"))), failures)
+        assertTrue("tries again next time", store.value.automation("once")!!.enabled)
+    }
+
+    @Test
+    fun runNowReportsWhetherEveryDeviceTookTheChange() = runTest {
+        hub.refresh()
+        val once = Automation("once", "Once", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn), runOnce = true)
+        repository.saveAutomation(once)
+        assertTrue(hub.execute(once))
+        assertTrue("Run now is a try-out: a run-once automation stays on", store.value.automation("once")!!.enabled)
+        val lost = Action.SetValues("missing:lost", listOf(SetValue(Keys.POWER, Value.Bool(true))))
+        assertFalse(hub.execute(once.copy(actions = listOf(powerOn, lost, Action.Notify("t", "x")))))
+    }
 }

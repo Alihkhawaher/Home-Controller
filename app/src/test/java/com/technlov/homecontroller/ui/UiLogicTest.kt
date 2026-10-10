@@ -104,6 +104,8 @@ class UiLogicTest {
             actions = listOf(Action.SetValues("fake:a", listOf(SetValue(Keys.POWER, Value.Bool(true))))),
         )
         assertEquals(time, AutomationDraft.from(time).toAutomation("unused"))
+        val once = time.copy(id = "o", runOnce = true)
+        assertEquals(once, AutomationDraft.from(once).toAutomation("unused"))
 
         val state = Automation(
             "s", "Hot",

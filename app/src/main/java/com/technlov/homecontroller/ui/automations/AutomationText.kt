@@ -34,6 +34,14 @@ fun daysText(days: Set<DayOfWeek>): String = when {
     else -> localWeek().filter { it in days }.joinToString(", ") { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
 }
 
+/** The days a schedule repeats on -- or, for a run-once automation, "Once" (on the next of those days). */
+@Composable
+fun repeatText(days: Set<DayOfWeek>, runOnce: Boolean): String = when {
+    !runOnce -> daysText(days)
+    days.isEmpty() || days.size == 7 -> stringResource(R.string.repeat_once)
+    else -> stringResource(R.string.summary_pair, stringResource(R.string.repeat_once), daysText(days))
+}
+
 @Composable
 fun opText(op: Op): String = stringResource(
     when (op) {
@@ -47,18 +55,20 @@ fun opText(op: Op): String = stringResource(
 )
 
 @Composable
-fun triggerSummary(trigger: Trigger, devices: List<DeviceOption>): String = when (trigger) {
-    is Trigger.TimeOfDay -> stringResource(R.string.trigger_time_summary, formatTime(trigger.hour, trigger.minute), daysText(trigger.days))
+fun triggerSummary(trigger: Trigger, devices: List<DeviceOption>, runOnce: Boolean = false): String = when (trigger) {
+    is Trigger.TimeOfDay ->
+        stringResource(R.string.trigger_time_summary, formatTime(trigger.hour, trigger.minute), repeatText(trigger.days, runOnce))
     is Trigger.StateMatches -> {
         val device = devices.firstOrNull { it.key == trigger.device }
         val capability = device?.capability(trigger.key)
-        stringResource(
+        val text = stringResource(
             R.string.trigger_state_summary,
             device?.name ?: stringResource(R.string.automation_unknown_device),
             capability?.label ?: trigger.key,
             opText(trigger.op),
             valueText(capability, trigger.value),
         )
+        if (runOnce) stringResource(R.string.summary_pair, text, stringResource(R.string.repeat_once)) else text
     }
 }
 

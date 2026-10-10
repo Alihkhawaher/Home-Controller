@@ -21,6 +21,11 @@ data class Automation(
     val trigger: Trigger,
     val conditions: List<Condition> = emptyList(),
     val actions: List<Action>,
+    /**
+     * Run once: the hub turns the automation off ([enabled] = false) after a run in which every device took its
+     * change. A run that failed leaves it on, so it tries again next time. Turning it back on arms it again.
+     */
+    val runOnce: Boolean = false,
 )
 
 sealed interface Trigger {

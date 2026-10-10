@@ -29,8 +29,8 @@ import com.technlov.home.core.Automation
 import com.technlov.home.core.Capability
 import com.technlov.home.core.Trigger
 import com.technlov.homecontroller.R
-import com.technlov.homecontroller.ui.automations.daysText
 import com.technlov.homecontroller.ui.automations.formatTime
+import com.technlov.homecontroller.ui.automations.repeatText
 import com.technlov.homecontroller.ui.valueText
 
 /**
@@ -93,7 +93,7 @@ fun SchedulesCard(
                             color = if (automation.enabled) scheme.onSurface else scheme.onSurfaceVariant,
                         )
                         Text(
-                            daysText(time.days) + " · " + changesText(automation, capabilities),
+                            repeatText(time.days, automation.runOnce) + " · " + changesText(automation, capabilities),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
                         )

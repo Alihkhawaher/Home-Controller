@@ -197,6 +197,11 @@
     <string name="automation_device_missing">This device was removed. Pick another one.</string>
     <string name="automation_enabled">Enabled</string>
     <string name="automation_enabled_text">Runs by itself when it is due</string>
+    <string name="automation_run_once">Run once</string>
+    <string name="automation_run_once_text">Turns itself off after it has run. If a device doesn’t take the change, it stays on and tries again next time.</string>
+    <string name="repeat_once">Once</string>
+    <!-- Two parts of a summary, e.g. "Once · Fri, Sat". -->
+    <string name="summary_pair">%1$s · %2$s</string>
     <string name="automation_run_now">Run now</string>
     <string name="automation_delete_title">Delete automation?</string>
     <string name="automation_delete_text">“%1$s” will be deleted.</string>
