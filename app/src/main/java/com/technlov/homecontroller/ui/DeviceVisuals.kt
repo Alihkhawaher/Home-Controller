@@ -5,6 +5,9 @@ import androidx.compose.material.icons.automirrored.rounded.Input
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.TimerOff
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.Autorenew
 import androidx.compose.material.icons.rounded.Bedtime
@@ -109,6 +112,10 @@ fun capabilityIcon(key: String): ImageVector = when (key) {
     "x_fan" -> Icons.Rounded.WindPower
     "clean_filter" -> Icons.Rounded.FilterAlt
     "clock" -> Icons.Rounded.Schedule
+    "child_lock" -> Icons.Rounded.Lock
+    "defrost" -> Icons.Rounded.AcUnit
+    "timer_on" -> Icons.Rounded.Timer
+    "timer_off" -> Icons.Rounded.TimerOff
     "night_mode" -> Icons.Rounded.NightsStay
     "color_temperature" -> Icons.Rounded.Palette
     else -> Icons.Rounded.Tune

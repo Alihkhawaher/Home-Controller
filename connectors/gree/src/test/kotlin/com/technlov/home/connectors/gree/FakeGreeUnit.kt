@@ -20,10 +20,14 @@ class FakeGreeUnit(
         "Air" to 0, "Blo" to 1, "Health" to 1, "SwhSlp" to 0, "SlpMod" to 0, "Lig" to 1, "SwingLfRig" to 4,
         "SwUpDn" to 2, "Quiet" to 0, "Tur" to 0, "StHt" to 0, "HeatCoolType" to 0, "SvSt" to 0,
         "AllErr" to 0, "Dfltr" to 0, "hid" to "TEST05RT13V1.00", "time" to "2026-10-10 12:00:00",
+        "ChildLock" to 0, "TmrOn" to 0, "TmrOff" to 0, "Defrost" to 0,
     )
 
     /** Columns this unit does not know (it leaves them out of a status reply). */
     val unknownColumns = mutableSetOf<String>()
+
+    /** A status request naming any of these gets no reply at all (like the old module and a long unknown list). */
+    val silentOnColumns = mutableSetOf<String>()
 
     /** The next this-many requests get no reply (UDP loss). */
     var dropNext = 0
@@ -81,8 +85,9 @@ class FakeGreeUnit(
             )
             "status" -> {
                 val asked = JSONArray(p.getJSONArray("cols").toString())
-                val cols = (0 until asked.length()).map { asked.getString(it) }
-                    .filter { it in state && it !in unknownColumns }
+                val names = (0 until asked.length()).map { asked.getString(it) }
+                if (names.any { it in silentOnColumns }) return null
+                val cols = names.filter { it in state && it !in unknownColumns }
                 reply(
                     linkedMapOf("t" to "dat", "mac" to mac, "r" to 200, "cols" to cols, "dat" to cols.map { state[it] }),
                     unitKey.toByteArray(),

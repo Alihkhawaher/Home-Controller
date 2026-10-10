@@ -14,6 +14,10 @@ object GreeKeys {
     const val X_FAN = "x_fan"
     const val CLEAN_FILTER = "clean_filter"
     const val CLOCK = "clock"
+    const val CHILD_LOCK = "child_lock"
+    const val DEFROST = "defrost"
+    const val TIMER_ON = "timer_on"
+    const val TIMER_OFF = "timer_off"
 }
 
 /**
@@ -29,6 +33,13 @@ internal object GreeModel {
 
     /** Asked in a separate small request, less often. */
     val DIAGNOSTIC_COLUMNS = listOf("AllErr", "Dfltr", "hid", "time")
+
+    /**
+     * Asked in their own small request (at open, then with the diagnostics), NEVER in [STATUS_COLUMNS]: modules differ
+     * on them (V1.2.1 leaves out ChildLock), and an old module went silent to a long request with names it did not know.
+     * Only the ones a unit answers at open become capabilities.
+     */
+    val EXTRA_COLUMNS = listOf("ChildLock", "TmrOn", "TmrOff", "Defrost")
 
     const val TEMP_MIN = 16
     const val TEMP_MAX = 30
@@ -94,20 +105,27 @@ internal object GreeModel {
         ToggleField(GreeKeys.SLEEP, "Sleep", "SwhSlp", alsoSets = listOf("SlpMod")),
         ToggleField(GreeKeys.HEALTH, "Ioniser", "Health"),
         ToggleField(GreeKeys.X_FAN, "X-Fan", "Blo"),
+        ToggleField(GreeKeys.CHILD_LOCK, "Child lock", "ChildLock"),
         ReadingField(Keys.FAULT, "Fault", "AllErr", diagnostic = true),
         ReadingField(Keys.FIRMWARE, "Module firmware", "hid", diagnostic = true),
         ReadingField(GreeKeys.CLEAN_FILTER, "Clean filter", "Dfltr", diagnostic = true),
         ReadingField(GreeKeys.CLOCK, "Unit clock", "time", diagnostic = true),
+        ReadingField(GreeKeys.DEFROST, "Defrosting", "Defrost", diagnostic = true),
+        ReadingField(GreeKeys.TIMER_ON, "On timer set", "TmrOn", diagnostic = true),
+        ReadingField(GreeKeys.TIMER_OFF, "Off timer set", "TmrOff", diagnostic = true),
     )
 
     private val BY_KEY = FIELDS.associateBy { it.capability.key }
 
     /**
-     * The capabilities to declare. [answered] = the columns the unit returned at the first read; a field whose column
-     * it did not return is left out. Null or empty (unknown) = declare everything.
+     * The capabilities to declare. [answered] = the status and diagnostic columns the unit returned at the first read;
+     * a field whose column it did not return is left out (null or empty = unknown: declare them all). [extras] = the
+     * [EXTRA_COLUMNS] it answered: those are declared only when answered.
      */
-    fun capabilities(answered: Set<String>? = null): List<Capability> =
-        FIELDS.filter { answered.isNullOrEmpty() || it.column in answered }.map { it.capability }
+    fun capabilities(answered: Set<String>? = null, extras: Set<String> = emptySet()): List<Capability> =
+        FIELDS.filter {
+            if (it.column in EXTRA_COLUMNS) it.column in extras else answered.isNullOrEmpty() || it.column in answered
+        }.map { it.capability }
 
     /** Raw status (+ diagnostic) columns -> capability values. Columns the unit did not send are left out. */
     fun decode(raw: Map<String, Any?>): Map<String, Value> {
@@ -129,6 +147,7 @@ internal object GreeModel {
         Keys.CURRENT_TEMPERATURE -> num(v)?.let { roomTemperature(it) }?.let { Value.Num(it) }
         Keys.FAULT -> int(v)?.let { Value.Text(if (it == 0) "none" else "code $it") }
         GreeKeys.CLEAN_FILTER -> int(v)?.let { Value.Bool(it != 0) }
+        GreeKeys.DEFROST, GreeKeys.TIMER_ON, GreeKeys.TIMER_OFF -> int(v)?.let { Value.Text(if (it != 0) "yes" else "no") }
         Keys.FIRMWARE -> moduleBuild(v.toString())?.let { Value.Text(it) }
         else -> v.toString().trim().takeIf { it.isNotEmpty() }?.let { Value.Text(it) }
     }

@@ -38,16 +38,24 @@ class GreeSession internal constructor(
     private var diagAt: Long? = null
     private var online = true
 
+    /** The [GreeModel.EXTRA_COLUMNS] values; asked only when the unit answered some of them at open. */
+    private var extras: Map<String, Any?> = emptyMap()
+    private var extrasSupported = false
+    private var extrasDue = false
+
     private val who get() = "${device.name} (${device.address})"
 
     /** First read: learns which columns the unit answers and declares only those capabilities. */
     internal suspend fun prepare() = lock.withLock {
         raw = statusWithRebind(GreeModel.STATUS_COLUMNS)
         readDiagnostics()
+        readExtras()
+        extrasSupported = extras.isNotEmpty()
         val answered = raw.keys + diag.keys
         // A unit that answered no diagnostics (or could not be asked) keeps them declared: the next read may get them.
         val withDiag = if (diag.isEmpty()) answered + GreeModel.DIAGNOSTIC_COLUMNS else answered
-        capabilities = GreeModel.capabilities(withDiag.takeIf { raw.isNotEmpty() })
+        // The extras, by contrast, only when answered (a module without ChildLock just leaves it out).
+        capabilities = GreeModel.capabilities(withDiag.takeIf { raw.isNotEmpty() }, extras.keys)
     }
 
     override suspend fun read(): DeviceState = lock.withLock { readLocked() }
@@ -58,6 +66,11 @@ class GreeSession internal constructor(
         } catch (e: IllegalArgumentException) {
             log.warn(GreeClient.SOURCE, "$who: change refused before sending: ${e.message}")
             throw ConnectorException("${device.name}: ${e.message}", e)
+        }
+        val declared = capabilities.mapTo(HashSet()) { it.key }
+        changes.firstOrNull { it.key !in declared }?.let {
+            log.warn(GreeClient.SOURCE, "$who: change refused before sending: this unit has no '${it.key}'")
+            throw ConnectorException("${device.name}: this unit has no '${it.key}'")
         }
         if (columns.isEmpty()) return@withLock readLocked()
         val sent = columns.entries.joinToString { "${it.key}=${it.value}" }
@@ -72,7 +85,11 @@ class GreeSession internal constructor(
             throw e
         }
         log.info(GreeClient.SOURCE, "$who: command confirmed: ${confirmed.entries.joinToString { "${it.key}=${it.value}" }}")
-        raw = raw + confirmed
+        raw = raw + confirmed.filterKeys { it !in GreeModel.EXTRA_COLUMNS }
+        if (columns.keys.any { it in GreeModel.EXTRA_COLUMNS }) {
+            extras = extras + confirmed.filterKeys { it in GreeModel.EXTRA_COLUMNS }
+            extrasDue = true // read them back now, not in 5 minutes
+        }
         readLocked()
     }
 
@@ -81,16 +98,20 @@ class GreeSession internal constructor(
             raw = statusWithRebind(GreeModel.STATUS_COLUMNS)
             val now = config.clock()
             val last = diagAt
-            if (last == null || now - last >= config.diagnosticsEveryMs) readDiagnostics()
+            if (last == null || now - last >= config.diagnosticsEveryMs) {
+                readDiagnostics()
+                if (extrasSupported) extrasDue = true
+            }
+            if (extrasDue) readExtras()
             if (!online) log.info(GreeClient.SOURCE, "$who: answering again")
             online = true
-            DeviceState(GreeModel.decode(raw + diag), online = true, updatedAtMillis = now)
+            DeviceState(GreeModel.decode(raw + diag + extras), online = true, updatedAtMillis = now)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             if (online) log.warn(GreeClient.SOURCE, "$who: went silent: ${e.message}")
             online = false
-            DeviceState(GreeModel.decode(raw + diag), online = false, updatedAtMillis = config.clock(), error = e.message)
+            DeviceState(GreeModel.decode(raw + diag + extras), online = false, updatedAtMillis = config.clock(), error = e.message)
         }
     }
 
@@ -103,6 +124,19 @@ class GreeSession internal constructor(
             throw e
         } catch (e: Exception) {
             log.warn(GreeClient.SOURCE, "$who: diagnostics not answered: ${e.message}")
+        }
+    }
+
+    /** The extras, in their own small request (never merged into the status request). Best effort, like diagnostics. */
+    private suspend fun readExtras() {
+        extrasDue = false
+        try {
+            extras = client.status(GreeModel.EXTRA_COLUMNS, attempts = config.diagnosticsTries)
+                .filterKeys { it in GreeModel.EXTRA_COLUMNS }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(GreeClient.SOURCE, "$who: extra columns not answered: ${e.message}")
         }
     }
 
