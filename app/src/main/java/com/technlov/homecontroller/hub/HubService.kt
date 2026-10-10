@@ -9,7 +9,11 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.technlov.home.core.error
+import com.technlov.home.core.info
+import com.technlov.home.core.warn
 import com.technlov.homecontroller.app
+import com.technlov.homecontroller.diag.LogSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -30,13 +34,17 @@ import kotlinx.coroutines.launch
 class HubService : Service() {
     // Last line of defence: device errors are handled inside the hub, but a bug must never crash the service.
     private val scope = CoroutineScope(
-        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Hub error", e) },
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e ->
+            Log.e(TAG, "Hub error", e)
+            runCatching { app.eventLog.error(LogSource.SERVICE, "Hub error", e) }
+        },
     )
 
     override fun onCreate() {
         super.onCreate()
         val container = app
         goForeground(container.notifications.hubNotification(0, 0))
+        container.eventLog.info(LogSource.SERVICE, "Hub service started (foreground)")
         scope.launch {
             while (isActive) {
                 try {
@@ -45,6 +53,7 @@ class HubService : Service() {
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Hub stopped unexpectedly; restarting", e)
+                    container.eventLog.error(LogSource.SERVICE, "Hub stopped unexpectedly; restarting in 5 s", e)
                     delay(RESTART_DELAY_MS)
                 }
             }
@@ -62,6 +71,7 @@ class HubService : Service() {
             // Restarted by the system after being killed: only carry on if the user wants a background hub.
             scope.launch {
                 val wanted = app.repository.current().settings.runInBackground || app.hub.appVisible.value
+                app.eventLog.info(LogSource.SERVICE, "Restarted by Android; ${if (wanted) "carrying on" else "not wanted, stopping"}")
                 if (!wanted) stopSelf()
             }
         }
@@ -71,6 +81,7 @@ class HubService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        app.eventLog.info(LogSource.SERVICE, "Hub service stopped")
         scope.cancel()
         super.onDestroy()
     }
@@ -99,6 +110,7 @@ class HubService : Service() {
                 // Android refuses foreground services started from the background in some states; the app keeps
                 // working while open (the UI drives the hub directly) and the next app start tries again.
                 Log.w(TAG, "Could not start the hub service", e)
+                context.app.eventLog.warn(LogSource.SERVICE, "Android did not let the hub service start", e)
             }
         }
 

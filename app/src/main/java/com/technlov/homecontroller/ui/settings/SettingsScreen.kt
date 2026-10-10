@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.MeetingRoom
+import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Schedule
@@ -75,7 +76,12 @@ import com.technlov.homecontroller.ui.rememberNotificationAccess
 import com.technlov.homecontroller.ui.theme.supportsDynamicColor
 
 @Composable
-fun SettingsScreen(onOpenRooms: () -> Unit, onOpenPlugins: () -> Unit, onOpenAbout: () -> Unit) {
+fun SettingsScreen(
+    onOpenRooms: () -> Unit,
+    onOpenPlugins: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+    onOpenAbout: () -> Unit,
+) {
     val vm = appViewModel { SettingsViewModel(it) }
     val ui by vm.ui.collectAsState()
     val settings = ui.settings
@@ -219,6 +225,13 @@ fun SettingsScreen(onOpenRooms: () -> Unit, onOpenPlugins: () -> Unit, onOpenAbo
                         title = stringResource(R.string.settings_plugins),
                         text = pluralStringResource(R.plurals.plugins_installed, vm.connectors.size, vm.connectors.size),
                         onClick = onOpenPlugins,
+                    )
+                    RowDivider()
+                    NavRow(
+                        icon = Icons.Rounded.MonitorHeart,
+                        title = stringResource(R.string.settings_diagnostics),
+                        text = stringResource(R.string.settings_diagnostics_text),
+                        onClick = onOpenDiagnostics,
                     )
                     RowDivider()
                     NavRow(

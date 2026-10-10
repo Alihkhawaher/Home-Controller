@@ -4,6 +4,7 @@ import com.technlov.home.core.Capability
 import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceState
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.Value
 
 /** How the hub's link to one device is doing. */
 enum class LinkStatus { CONNECTING, ONLINE, OFFLINE }
@@ -23,6 +24,24 @@ sealed interface DeviceIssue {
             else -> Failed(error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName)
         }
     }
+}
+
+/** Plain English for the diagnostics log (the UI uses translated strings instead). */
+fun DeviceIssue.describe(): String = when (this) {
+    DeviceIssue.Timeout -> "no answer in time"
+    DeviceIssue.UnknownDevice -> "not a saved device"
+    is DeviceIssue.NoConnector -> "no plugin \"$connectorId\""
+    is DeviceIssue.Failed -> message ?: "failed"
+}
+
+/** "power=on, target_temperature=22" for the diagnostics log. */
+fun List<SetValue>.describe(): String = joinToString(", ") { change ->
+    val shown = when (val v = change.value) {
+        is Value.Bool -> if (v.v) "on" else "off"
+        is Value.Num -> if (v.v % 1.0 == 0.0) v.v.toLong().toString() else v.v.toString()
+        is Value.Text -> v.v
+    }
+    "${change.key}=$shown"
 }
 
 class DeviceTimeoutException : Exception("The device did not answer in time")

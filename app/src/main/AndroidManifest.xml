@@ -8,6 +8,17 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
+    <!-- Pairing a new device: scan for its setup hotspot and join it for a moment. Location is what Android requires
+         for Wi-Fi scan results; the app never asks where the phone is. Asked only on the "Set up a new device" screen. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="33" />
+
     <!-- The hub: a foreground service that polls devices and runs automations, started again after a reboot. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -18,11 +29,13 @@
         android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
         tools:ignore="BatteryLife" />
 
-    <!-- No cloud backup: the device list stays on the phone (a phone-to-phone transfer may carry it along). -->
+    <!-- No cloud backup: the device list stays on the phone (a phone-to-phone transfer may carry it along).
+         allowBackup=false covers Android 11 and older, so no fullBackupContent is needed. -->
     <application
         android:name=".HomeApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:ignore="DataExtractionRules"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -50,6 +63,17 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Local home-automation hub" />
         </service>
+
+        <!-- "Share log" in Diagnostics hands the exported text file to other apps. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.logs"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/log_paths" />
+        </provider>
 
         <receiver
             android:name=".hub.BootReceiver"

@@ -306,4 +306,90 @@
     <string name="hub_notification_text_none_online">Can’t reach your devices right now</string>
     <!-- "online" and "offline" do not change with the number. -->
     <string name="hub_notification_text_some" tools:ignore="PluralsCandidate">%1$d online, %2$d offline</string>
+
+    <string name="action_try_again">Try again</string>
+
+    <!-- Pairing (setting up a device that is not on the Wi-Fi yet) -->
+    <string name="pairing_title">Set up a new device</string>
+    <string name="pairing_entry_title">Set up a new device</string>
+    <string name="pairing_entry_text">For a device that isn’t on your Wi-Fi yet</string>
+    <string name="pairing_choose_title">What are you setting up?</string>
+    <string name="pairing_choose_text">Pick the kind of device. Each plugin knows how to bring its devices onto your Wi-Fi.</string>
+    <string name="pairing_none">None of the installed plugins can set up new devices yet.</string>
+    <string name="pairing_steps_text">First, put the device in setup mode:</string>
+    <string name="pairing_tip_time">Setup mode lasts about 8 minutes. If it runs out, start again from the first step.</string>
+    <string name="pairing_ready">It’s in setup mode</string>
+    <string name="pairing_hotspot_title">Find the device</string>
+    <string name="pairing_hotspot_text">In setup mode the device opens its own Wi-Fi hotspot. Pick it below.</string>
+    <string name="pairing_permission_title">Allow Wi-Fi scanning</string>
+    <string name="pairing_permission_text">To find the device’s hotspot, Android needs the location and nearby devices permissions: that is how it lets apps see Wi-Fi networks. Home Controller only looks for the device’s hotspot; it never uses your location.</string>
+    <string name="pairing_location_off">Turn on Location: Android shows Wi-Fi networks to apps only when it is on.</string>
+    <string name="pairing_hotspots_nearby">Device hotspots nearby</string>
+    <string name="pairing_hotspots_scanning">Looking for device hotspots…</string>
+    <string name="pairing_hotspots_none">No device hotspots found</string>
+    <string name="pairing_hotspots_none_hint">Make sure the device is in setup mode and close to the phone, then refresh.</string>
+    <string name="pairing_hotspots_throttled">Android limits how often apps can scan for Wi-Fi. Wait a minute and refresh, or type the hotspot’s name below.</string>
+    <string name="pairing_signal">Signal: %1$s</string>
+    <string name="signal_strong">strong</string>
+    <string name="signal_good">good</string>
+    <string name="signal_weak">weak</string>
+    <string name="pairing_manual_title">Enter the hotspot name</string>
+    <string name="pairing_manual_text">Can’t see it in the list? Type the hotspot’s name as it appears in your phone’s Wi-Fi settings.</string>
+    <string name="pairing_manual_label">Hotspot name</string>
+    <string name="pairing_manual_unusual">This doesn’t look like this kind of device’s hotspot, but you can still try it.</string>
+    <string name="pairing_manual_use">Use this hotspot</string>
+    <string name="pairing_home_title">Your home Wi-Fi</string>
+    <string name="pairing_home_text">The device on hotspot “%1$s” will join this network. Type its name and password.</string>
+    <string name="pairing_home_ssid">Wi-Fi name</string>
+    <string name="pairing_home_password">Wi-Fi password</string>
+    <string name="pairing_show_password">Show password</string>
+    <string name="pairing_hide_password">Hide password</string>
+    <string name="pairing_24ghz_note">This device works only with 2.4 GHz Wi-Fi.</string>
+    <string name="pairing_5ghz_warning">Your phone is on a 5 GHz network, and this device needs 2.4 GHz. If your router has a separate 2.4 GHz network, use its name instead.</string>
+    <string name="pairing_password_note">The password goes only to the device. Home Controller doesn’t keep it.</string>
+    <string name="pairing_connect">Connect the device</string>
+    <string name="pairing_progress_title">Setting up</string>
+    <string name="pairing_progress_text">Device hotspot “%1$s”</string>
+    <string name="pairing_stage_join">Joining the device</string>
+    <string name="pairing_stage_send">Sending the Wi-Fi details</string>
+    <string name="pairing_stage_wait">Waiting for it to join your Wi-Fi</string>
+    <string name="pairing_stage_done">Done</string>
+    <string name="pairing_join_prompt">If Android asks to connect to the device, tap Connect.</string>
+    <string name="pairing_manual_join">Open Wi-Fi settings and join “%1$s” (password: %2$s), then come back here.</string>
+    <string name="pairing_no_password">none</string>
+    <plurals name="pairing_searches">
+        <item quantity="one">Searched your Wi-Fi %d time</item>
+        <item quantity="other">Searched your Wi-Fi %d times</item>
+    </plurals>
+    <string name="pairing_fail_join">Couldn’t join the device’s hotspot</string>
+    <string name="pairing_fail_join_help">Is setup mode still on? It lasts about 8 minutes. Put the device in setup mode again and try again. If Android asked to connect, tap Connect.</string>
+    <string name="pairing_fail_send">Couldn’t send the Wi-Fi details</string>
+    <string name="pairing_fail_send_help">The phone lost the device’s hotspot. Keep the phone close to the device and try again.</string>
+    <string name="pairing_fail_unconfirmed">The device didn’t confirm</string>
+    <string name="pairing_fail_unconfirmed_help">Some devices take the Wi-Fi details without answering. Wait for it to appear on your Wi-Fi, or try again.</string>
+    <string name="pairing_fail_not_found">The device didn’t appear on your Wi-Fi</string>
+    <string name="pairing_fail_not_found_help">Check the Wi-Fi password and that the network is 2.4 GHz. Then put the device in setup mode again and try again.</string>
+    <string name="pairing_wait_anyway">Wait for it anyway</string>
+    <string name="pairing_search_again">Keep searching</string>
+    <string name="pairing_cancelled">Setup cancelled.</string>
+    <string name="pairing_found">Found it</string>
+    <string name="pairing_added">Added to your home</string>
+    <string name="pairing_open_device">Open device</string>
+    <string name="pairing_done">Done</string>
+
+    <!-- Diagnostics -->
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="settings_diagnostics_text">What the hub and plugins did, to share when something goes wrong</string>
+    <string name="diagnostics_verbose">Verbose logging</string>
+    <string name="diagnostics_verbose_text">Also records every message to and from your devices. The log grows much faster; turn it off when you are done.</string>
+    <string name="diagnostics_privacy">The log has device names and addresses on your network. It never has passwords.</string>
+    <string name="diagnostics_follow">Follow</string>
+    <string name="diagnostics_all_sources">All</string>
+    <string name="diagnostics_empty">Nothing logged yet</string>
+    <string name="diagnostics_share">Share log</string>
+    <string name="diagnostics_share_title">Share the Home Controller log</string>
+    <string name="diagnostics_share_none">No app can receive the log</string>
+    <string name="diagnostics_clear">Clear log</string>
+    <string name="diagnostics_clear_title">Clear the log?</string>
+    <string name="diagnostics_clear_text">Everything logged so far is deleted from this phone.</string>
 </resources>

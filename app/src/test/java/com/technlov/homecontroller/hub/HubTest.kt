@@ -6,6 +6,7 @@ import com.technlov.home.core.AutomationEngine
 import com.technlov.home.core.ConnectorRegistry
 import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceState
+import com.technlov.home.core.EventLog
 import com.technlov.home.core.Keys
 import com.technlov.home.core.SetValue
 import com.technlov.home.core.Trigger
@@ -154,6 +155,33 @@ class HubTest {
         repository.removeDevice("missing:lost")
         hub.refresh()
         assertEquals(setOf(ac), hub.live.value.keys)
+    }
+
+    @Test
+    fun linkChangesAndChangesAreLogged() = runTest {
+        val lines = mutableListOf<String>()
+        val log = object : EventLog {
+            override val verbose = false
+            override fun log(level: EventLog.Level, source: String, message: String, error: Throwable?) {
+                lines += "$level $source $message"
+            }
+        }
+        val logged = Hub(ConnectorRegistry(listOf(connector)), repository, engine, events, ioContext = EmptyCoroutineContext, log = log)
+        logged.refresh(listOf(ac))
+        logged.apply(ac, listOf(SetValue(Keys.TARGET_TEMPERATURE, Value.Num(21.0))))
+        connector.failReads = true
+        logged.refresh(listOf(ac))
+        logged.refresh(listOf(ac))
+        connector.failReads = false
+        logged.refresh(listOf(ac))
+
+        assertTrue(lines.any { it == "INFO hub Bedroom AC: added (fake at 192.0.2.10)" })
+        assertTrue(lines.any { it.startsWith("INFO hub Bedroom AC: connected at 192.0.2.10") })
+        assertTrue(lines.any { it == "INFO hub Bedroom AC: set target_temperature=21" })
+        assertTrue(lines.any { it == "WARN hub Bedroom AC is offline: no reply" })
+        assertTrue(lines.any { it.startsWith("INFO hub Bedroom AC: no reply (failure 2, next try in 10 s)") })
+        assertTrue(lines.any { it.startsWith("INFO hub Bedroom AC is online again") })
+        assertTrue("no DEBUG lines unless verbose", lines.none { it.startsWith("DEBUG") })
     }
 
     @Test

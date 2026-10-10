@@ -11,6 +11,9 @@ import com.technlov.home.core.key
 import com.technlov.homecontroller.AppContainer
 import com.technlov.homecontroller.R
 import com.technlov.homecontroller.data.Room
+import com.technlov.homecontroller.diag.LogSource
+import com.technlov.home.core.info
+import com.technlov.home.core.warn
 import com.technlov.homecontroller.hub.DeviceIssue
 import com.technlov.homecontroller.net.Ipv4
 import com.technlov.homecontroller.ui.UiMessage
@@ -77,6 +80,12 @@ class DiscoveryViewModel(private val container: AppContainer) : ViewModel() {
                 state.update { it.copy(noNetwork = true, hasScanned = true) }
                 return@launch
             }
+            val saved = container.repository.current().devices
+            container.eventLog.info(
+                LogSource.DISCOVERY,
+                "Scan of ${network.cidr} with ${container.registry.all.joinToString { it.info.id }} " +
+                    "(${saved.size} saved device(s) asked directly)",
+            )
             state.update { s ->
                 s.copy(
                     scanning = true,
@@ -91,7 +100,11 @@ class DiscoveryViewModel(private val container: AppContainer) : ViewModel() {
                 container.network.withMulticastLock {
                     coroutineScope {
                         container.registry.all.forEach { connector ->
-                            launch { runDiscovery(connector, network.local, replace = true) }
+                            // Ask the saved devices of this plugin directly too: broadcasts get lost, unicasts rarely.
+                            val known = saved.filter { it.ref.connectorId == connector.info.id }
+                                .map { it.ref.address }
+                                .distinct()
+                            launch { runDiscovery(connector, network.local.copy(knownHosts = known), replace = true) }
                         }
                     }
                 }
@@ -113,6 +126,7 @@ class DiscoveryViewModel(private val container: AppContainer) : ViewModel() {
         }
         if (state.value.lookingUp) return
         viewModelScope.launch {
+            container.eventLog.info(LogSource.DISCOVERY, "Look up ${network.broadcast}")
             state.update { it.copy(lookingUp = true, lookupIssue = null) }
             withContext(Dispatchers.IO) { container.network.prepare() }
             val before = state.value.foundCount
@@ -137,10 +151,16 @@ class DiscoveryViewModel(private val container: AppContainer) : ViewModel() {
 
     private suspend fun runDiscovery(connector: Connector, network: LocalNetwork, replace: Boolean, quietFailure: Boolean = false) {
         val id = connector.info.id
+        val started = System.currentTimeMillis()
         try {
             val found = withTimeout(DISCOVERY_TIMEOUT_MS + 5_000) {
                 withContext(Dispatchers.IO) { connector.discover(network, DISCOVERY_TIMEOUT_MS) }
             }.distinctBy { it.key() }
+            container.eventLog.info(
+                LogSource.DISCOVERY,
+                "$id: ${found.size} found in ${System.currentTimeMillis() - started} ms" +
+                    found.joinToString(prefix = if (found.isEmpty()) "" else ": ") { "${it.name} at ${it.address}" },
+            )
             // Devices already saved may have moved to a new address; keep them reachable.
             found.forEach { runCatching { container.repository.refreshDeviceRef(it) } }
             state.update { s ->
@@ -154,8 +174,11 @@ class DiscoveryViewModel(private val container: AppContainer) : ViewModel() {
                 })
             }
         } catch (e: CancellationException) {
-            if (e is TimeoutCancellationException) markFailed(id, DeviceIssue.Timeout.toUiText(), quietFailure) else throw e
+            if (e !is TimeoutCancellationException) throw e
+            container.eventLog.warn(LogSource.DISCOVERY, "$id: no result in time")
+            markFailed(id, DeviceIssue.Timeout.toUiText(), quietFailure)
         } catch (e: Exception) {
+            container.eventLog.warn(LogSource.DISCOVERY, "$id: search failed", e)
             markFailed(id, DeviceIssue.from(e).toUiText(), quietFailure)
         }
     }

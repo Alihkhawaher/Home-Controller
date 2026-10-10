@@ -12,5 +12,5 @@ keystore/
 *.keystore
 keystore.properties
 # local working data (device lists, outputs)
-data/
+/data/
 dist/

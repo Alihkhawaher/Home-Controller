@@ -43,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Cottage
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Lock
@@ -62,6 +63,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -114,7 +116,7 @@ import com.technlov.homecontroller.ui.theme.NumberStyle
 import java.time.LocalTime
 
 @Composable
-fun HomeScreen(onOpenDevice: (DeviceKey) -> Unit, onFindDevices: () -> Unit) {
+fun HomeScreen(onOpenDevice: (DeviceKey) -> Unit, onFindDevices: () -> Unit, onPairDevice: (() -> Unit)?) {
     val vm = appViewModel { HomeViewModel(it) }
     val ui by vm.ui.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -168,7 +170,7 @@ fun HomeScreen(onOpenDevice: (DeviceKey) -> Unit, onFindDevices: () -> Unit) {
         ) {
             when {
                 !ui.loaded -> Unit
-                ui.deviceCount == 0 -> EmptyHome(onFindDevices, Modifier.fillMaxSize())
+                ui.deviceCount == 0 -> EmptyHome(onFindDevices, onPairDevice, Modifier.fillMaxSize())
                 else -> DeviceGrid(
                     ui = ui,
                     gridState = gridState,
@@ -470,7 +472,7 @@ private fun TilePowerButton(on: Boolean, enabled: Boolean, accent: Color, onClic
 // ---- empty state ----
 
 @Composable
-private fun EmptyHome(onFindDevices: () -> Unit, modifier: Modifier = Modifier) {
+private fun EmptyHome(onFindDevices: () -> Unit, onPairDevice: (() -> Unit)?, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier) {
         Column(
             modifier = Modifier
@@ -506,6 +508,20 @@ private fun EmptyHome(onFindDevices: () -> Unit, modifier: Modifier = Modifier) 
                 Icon(Icons.Rounded.Radar, contentDescription = null)
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(R.string.action_find_devices), style = MaterialTheme.typography.titleMedium)
+            }
+            if (onPairDevice != null) {
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onPairDevice,
+                    shape = PillShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                ) {
+                    Icon(Icons.Rounded.AddCircle, contentDescription = null)
+                    Spacer(Modifier.width(10.dp))
+                    Text(stringResource(R.string.pairing_entry_title), style = MaterialTheme.typography.titleMedium)
+                }
             }
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -29,6 +29,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ErrorOutline
@@ -100,7 +102,7 @@ import com.technlov.homecontroller.ui.components.RadarPulse
 import kotlinx.coroutines.launch
 
 @Composable
-fun DiscoveryScreen(onBack: () -> Unit, onOpenDevice: (DeviceKey) -> Unit) {
+fun DiscoveryScreen(onBack: () -> Unit, onOpenDevice: (DeviceKey) -> Unit, onPairDevice: (() -> Unit)?) {
     val vm = appViewModel { DiscoveryViewModel(it) }
     val ui by vm.ui.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -117,6 +119,11 @@ fun DiscoveryScreen(onBack: () -> Unit, onOpenDevice: (DeviceKey) -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                    }
+                },
+                actions = {
+                    IconButton(onClick = vm::scan, enabled = !ui.scanning) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.action_scan_again))
                     }
                 },
             )
@@ -145,6 +152,9 @@ fun DiscoveryScreen(onBack: () -> Unit, onOpenDevice: (DeviceKey) -> Unit) {
                         )
                     }
                 }
+            }
+            if (onPairDevice != null) {
+                item(key = "pair") { PairEntryCard(onPairDevice) }
             }
             item(key = "byip") {
                 AddByIpCard(ui, onLookUp = vm::lookUp, onEdit = vm::clearLookupIssue)
@@ -349,6 +359,30 @@ private fun FoundDeviceRow(ref: DeviceRef, added: Boolean, onAdd: () -> Unit, on
     )
 }
 
+/** "Set up a new device": for devices that are not on the Wi-Fi yet. */
+@Composable
+private fun PairEntryCard(onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.AddCircle, contentDescription = null)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.pairing_entry_title), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.pairing_entry_text), style = MaterialTheme.typography.bodyMedium)
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+}
+
 @Composable
 private fun AddByIpCard(ui: DiscoveryUi, onLookUp: (String) -> Unit, onEdit: () -> Unit) {
     var address by rememberSaveable { mutableStateOf("") }
@@ -400,7 +434,7 @@ private fun AddByIpCard(ui: DiscoveryUi, onLookUp: (String) -> Unit, onEdit: () 
 
 /** Name the device and pick (or create) its room. */
 @Composable
-private fun AddDeviceSheet(
+internal fun AddDeviceSheet(
     ref: DeviceRef,
     rooms: List<Room>,
     onDismiss: () -> Unit,

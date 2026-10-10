@@ -9,11 +9,16 @@ import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.DeviceSession
 import com.technlov.home.core.DeviceState
+import com.technlov.home.core.EventLog
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.info
+import com.technlov.home.core.trace
+import com.technlov.home.core.warn
 import com.technlov.home.core.key
 import com.technlov.homecontroller.data.HomeData
 import com.technlov.homecontroller.data.HomeRepository
 import com.technlov.homecontroller.data.SavedDevice
+import com.technlov.homecontroller.diag.LogSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -64,6 +69,8 @@ class Hub(
     private val ioTimeoutMs: Long = DEFAULT_IO_TIMEOUT_MS,
     /** Where device calls run: never the main thread, even if a connector forgets to switch itself. */
     private val ioContext: CoroutineContext = Dispatchers.IO,
+    /** Diagnostics: link changes, retries, poll summaries, automation runs. Never device keys. */
+    private val log: EventLog = EventLog.None,
 ) {
     private data class SlotView(
         val status: LinkStatus,
@@ -74,9 +81,11 @@ class Hub(
     )
 
     /** One device's connection. Mutable fields change only while [mutex] is held. */
-    private class Slot(ref: DeviceRef, capabilities: List<Capability>) {
+    private class Slot(ref: DeviceRef, name: String, capabilities: List<Capability>) {
         val mutex = Mutex()
         @Volatile var ref: DeviceRef = ref
+        @Volatile var name: String = name
+        var offlineSince: Long? = null
         var session: DeviceSession? = null
         var failures = 0
         var nextAttemptAt = 0L
@@ -96,6 +105,8 @@ class Hub(
     private val publishLock = Any()
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private var previousStates: Map<DeviceKey, DeviceState> = emptyMap()
+    private var lastSummary: String? = null
+    private var lastSummaryAt = 0L
 
     private val _live = MutableStateFlow<Map<DeviceKey, DeviceLive>>(emptyMap())
     /** Live state of every saved device, keyed by [DeviceKey]. */
@@ -115,6 +126,7 @@ class Hub(
     suspend fun run() {
         runMutex.withLock {
             _running.value = true
+            log.info(LogSource.HUB, "Hub started")
             try {
                 coroutineScope {
                     launch {
@@ -129,6 +141,7 @@ class Hub(
                 }
             } finally {
                 _running.value = false
+                log.info(LogSource.HUB, "Hub stopped")
                 withContext(NonCancellable) {
                     slots.values.forEach { slot -> slot.mutex.withLock { slot.closeSession() } }
                 }
@@ -159,9 +172,16 @@ class Hub(
         try {
             runCatching(beforeNetworkUse)
             return slot.mutex.withLock {
+                val what = changes.describe()
                 val result = attempt(slot) { it.apply(changes) }
                     .mapCatching { state -> if (state.online) state else throw DeviceReportedOfflineException(state.error) }
-                result.onSuccess { onSuccess(slot, it) }.onFailure { slot.closeSession() }
+                result.onSuccess {
+                    log.info(LogSource.HUB, "${slot.name}: set $what")
+                    onSuccess(slot, it)
+                }.onFailure { error ->
+                    log.warn(LogSource.HUB, "${slot.name}: could not set $what: ${DeviceIssue.from(error).describe()}")
+                    slot.closeSession()
+                }
                 result
             }
         } finally {
@@ -173,13 +193,18 @@ class Hub(
     /** Runs an automation's actions now (the minute tick, or "Run now" in the editor). */
     suspend fun execute(automation: Automation, data: HomeData? = null) {
         val names = data ?: repository.current()
+        log.info(LogSource.HUB, "Automation \"${automation.name}\": running ${automation.actions.size} action(s)")
         for (action in automation.actions) {
             when (action) {
                 is Action.SetValues -> apply(action.device, action.changes).onFailure { error ->
                     val name = names.device(action.device)?.name ?: action.device
+                    log.warn(LogSource.HUB, "Automation \"${automation.name}\": $name did not take the change")
                     runCatching { events.automationFailed(automation, name, DeviceIssue.from(error)) }
                 }
-                is Action.Notify -> runCatching { events.notify(action.title, action.text) }
+                is Action.Notify -> {
+                    log.info(LogSource.HUB, "Automation \"${automation.name}\": notification \"${action.title}\"")
+                    runCatching { events.notify(action.title, action.text) }
+                }
             }
         }
     }
@@ -200,7 +225,9 @@ class Hub(
 
     private suspend fun pollLoop() {
         while (true) {
+            val started = nowMillis()
             pollSlots(slots.values.toList(), force = false)
+            logSummary(nowMillis() - started)
             val settings = repository.current().settings
             val seconds = if (appVisible.value) settings.foregroundPollSeconds else settings.backgroundPollSeconds
             withTimeoutOrNull(seconds.coerceAtLeast(1) * 1_000L) { wake.receive() }
@@ -218,6 +245,7 @@ class Hub(
                 throw e
             } catch (e: Exception) {
                 // An engine or storage error must not stop the hub; the next minute tries again.
+                log.warn(LogSource.HUB, "Automation check failed", e)
             }
         }
     }
@@ -253,9 +281,11 @@ class Hub(
     private suspend fun openSession(slot: Slot): DeviceSession {
         val ref = slot.ref
         val connector = registry[ref.connectorId] ?: throw MissingConnectorException(ref.connectorId)
+        log.trace(LogSource.HUB) { "${slot.name}: opening a session at ${ref.address}" }
         val session = connector.open(ref)
         slot.session = session
         val capabilities = session.capabilities
+        log.info(LogSource.HUB, "${slot.name}: connected at ${ref.address} (${capabilities.size} capabilities)")
         if (capabilities != slot.view.capabilities) {
             slot.view = slot.view.copy(capabilities = capabilities)
             try {
@@ -274,21 +304,50 @@ class Hub(
             onFailure(slot, DeviceReportedOfflineException(state.error))
             return
         }
+        val now = nowMillis()
+        if (slot.view.status == LinkStatus.OFFLINE) {
+            val away = slot.offlineSince?.let { " after ${(now - it) / 1_000} s" }.orEmpty()
+            log.info(LogSource.HUB, "${slot.name} is online again$away")
+        }
         slot.failures = 0
         slot.nextAttemptAt = 0
-        slot.view = slot.view.copy(status = LinkStatus.ONLINE, state = state, issue = null, lastSeenMillis = nowMillis())
+        slot.offlineSince = null
+        slot.view = slot.view.copy(status = LinkStatus.ONLINE, state = state, issue = null, lastSeenMillis = now)
     }
 
     private fun onFailure(slot: Slot, error: Throwable) {
         slot.failures++
         slot.closeSession()
-        slot.nextAttemptAt = nowMillis() + Backoff.delayMs(slot.failures)
+        val retryIn = Backoff.delayMs(slot.failures)
+        slot.nextAttemptAt = nowMillis() + retryIn
+        val issue = DeviceIssue.from(error)
         // One lost reply is common on Wi-Fi; only call a device that was online offline after a second miss.
         val stillOnline = slot.view.status == LinkStatus.ONLINE && slot.failures < OFFLINE_AFTER_FAILURES
-        slot.view = slot.view.copy(
-            status = if (stillOnline) LinkStatus.ONLINE else LinkStatus.OFFLINE,
-            issue = DeviceIssue.from(error),
-        )
+        val status = if (stillOnline) LinkStatus.ONLINE else LinkStatus.OFFLINE
+        if (status == LinkStatus.OFFLINE && slot.view.status != LinkStatus.OFFLINE) {
+            slot.offlineSince = nowMillis()
+            log.warn(LogSource.HUB, "${slot.name} is offline: ${issue.describe()}", error.takeIf { issue is DeviceIssue.Failed })
+        }
+        val message = "${slot.name}: ${issue.describe()} (failure ${slot.failures}, next try in ${retryIn / 1_000} s)"
+        if (slot.failures >= OFFLINE_AFTER_FAILURES) log.info(LogSource.HUB, message) else log.trace(LogSource.HUB) { message }
+        slot.view = slot.view.copy(status = status, issue = issue)
+    }
+
+    /** A poll summary: logged when the picture changes (or every few minutes), otherwise only when verbose. */
+    private fun logSummary(elapsedMs: Long) {
+        if (slots.isEmpty()) return
+        val views = slots.values.map { it.view.status }
+        val online = views.count { it == LinkStatus.ONLINE }
+        val offline = views.count { it == LinkStatus.OFFLINE }
+        val summary = "${slots.size} device(s): $online online, $offline offline"
+        val now = nowMillis()
+        if (summary != lastSummary || now - lastSummaryAt >= SUMMARY_EVERY_MS) {
+            log.info(LogSource.HUB, "Poll: $summary ($elapsedMs ms)")
+            lastSummary = summary
+            lastSummaryAt = now
+        } else {
+            log.trace(LogSource.HUB) { "Poll: $summary ($elapsedMs ms)" }
+        }
     }
 
     /** Brings [slots] in line with the saved devices: opens new ones, closes removed ones, reconnects moved ones. */
@@ -298,19 +357,25 @@ class Hub(
             for (key in slots.keys.toList()) {
                 if (key in wanted) continue
                 val removed = slots.remove(key) ?: continue
+                log.info(LogSource.HUB, "${removed.name}: removed")
                 removed.mutex.withLock { removed.closeSession() }
             }
             for ((key, device) in wanted) {
                 val slot = slots[key]
                 if (slot == null) {
-                    slots[key] = Slot(device.ref, device.capabilities)
+                    slots[key] = Slot(device.ref, device.name, device.capabilities)
+                    log.info(LogSource.HUB, "${device.name}: added (${device.ref.connectorId} at ${device.ref.address})")
                 } else if (slot.ref != device.ref) {
+                    slot.name = device.name
+                    log.info(LogSource.HUB, "${device.name}: now at ${device.ref.address}, reconnecting")
                     slot.mutex.withLock {
                         slot.closeSession()
                         slot.ref = device.ref
                         slot.failures = 0
                         slot.nextAttemptAt = 0
                     }
+                } else {
+                    slot.name = device.name
                 }
             }
         }
@@ -344,5 +409,6 @@ class Hub(
     companion object {
         const val DEFAULT_IO_TIMEOUT_MS = 8_000L
         const val OFFLINE_AFTER_FAILURES = 2
+        private const val SUMMARY_EVERY_MS = 10 * 60_000L
     }
 }

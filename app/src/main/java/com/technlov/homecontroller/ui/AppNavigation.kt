@@ -26,6 +26,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -40,7 +42,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.technlov.home.core.provisioningSupport
 import com.technlov.homecontroller.R
+import com.technlov.homecontroller.app
+import com.technlov.homecontroller.ui.pairing.PairingScreen
+import com.technlov.homecontroller.ui.settings.DiagnosticsScreen
 import com.technlov.homecontroller.ui.automations.AutomationEditorScreen
 import com.technlov.homecontroller.ui.automations.AutomationsScreen
 import com.technlov.homecontroller.ui.device.DeviceScreen
@@ -61,6 +67,8 @@ object Routes {
     const val PLUGINS = "settings/plugins"
     const val ABOUT = "settings/about"
     const val ROOMS = "settings/rooms"
+    const val DIAGNOSTICS = "settings/diagnostics"
+    const val PAIR = "pair"
     const val NEW = "new"
 
     fun device(key: String) = "device/${Uri.encode(key)}"
@@ -83,6 +91,10 @@ private fun NavHostController.backFrom(entry: NavBackStackEntry) {
 @Composable
 fun HomeControllerApp() {
     val nav = rememberNavController()
+    val context = LocalContext.current
+    // "Set up a new device" shows only when an installed plugin can adopt devices.
+    val canPair = remember { context.app.registry.all.any { it.provisioningSupport != null } }
+    val pair: (() -> Unit)? = if (canPair) ({ nav.navigate(Routes.PAIR) }) else null
     val current by nav.currentBackStackEntryAsState()
     val destination = current?.destination
     val showBar = topLevels.any { top -> destination?.hierarchy?.any { it.route == top.route } == true }
@@ -126,6 +138,7 @@ fun HomeControllerApp() {
                 HomeScreen(
                     onOpenDevice = { nav.navigate(Routes.device(it)) },
                     onFindDevices = { nav.navigate(Routes.DISCOVER) },
+                    onPairDevice = pair,
                 )
             }
             composable(Routes.AUTOMATIONS) {
@@ -135,6 +148,7 @@ fun HomeControllerApp() {
                 SettingsScreen(
                     onOpenRooms = { nav.navigate(Routes.ROOMS) },
                     onOpenPlugins = { nav.navigate(Routes.PLUGINS) },
+                    onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
                     onOpenAbout = { nav.navigate(Routes.ABOUT) },
                 )
             }
@@ -142,6 +156,17 @@ fun HomeControllerApp() {
                 DiscoveryScreen(
                     onBack = { nav.backFrom(entry) },
                     onOpenDevice = { nav.navigate(Routes.device(it)) },
+                    onPairDevice = pair,
+                )
+            }
+            composable(Routes.PAIR) { entry ->
+                PairingScreen(
+                    onBack = { nav.backFrom(entry) },
+                    onOpenDevice = { key ->
+                        nav.navigate(Routes.device(key)) {
+                            popUpTo(Routes.PAIR) { inclusive = true }
+                        }
+                    },
                 )
             }
             composable(Routes.DEVICE, arguments = listOf(navArgument("key") { type = NavType.StringType })) { entry ->
@@ -155,6 +180,7 @@ fun HomeControllerApp() {
             composable(Routes.PLUGINS) { entry -> PluginsScreen(onBack = { nav.backFrom(entry) }) }
             composable(Routes.ABOUT) { entry -> AboutScreen(onBack = { nav.backFrom(entry) }) }
             composable(Routes.ROOMS) { entry -> RoomsScreen(onBack = { nav.backFrom(entry) }) }
+            composable(Routes.DIAGNOSTICS) { entry -> DiagnosticsScreen(onBack = { nav.backFrom(entry) }) }
         }
     }
 }

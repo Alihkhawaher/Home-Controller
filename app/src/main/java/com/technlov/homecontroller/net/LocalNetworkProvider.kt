@@ -6,7 +6,11 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.technlov.home.core.EventLog
 import com.technlov.home.core.LocalNetwork
+import com.technlov.home.core.info
+import com.technlov.home.core.warn
+import com.technlov.homecontroller.diag.LogSource
 import java.net.Inet4Address
 
 /** The phone's current home network, found from the Wi-Fi (or Ethernet) link. */
@@ -19,11 +23,12 @@ data class CurrentNetwork(
     val isDefault: Boolean,
 )
 
-class LocalNetworkProvider(context: Context) {
+class LocalNetworkProvider(context: Context, private val log: EventLog = EventLog.None) {
     private val appContext = context.applicationContext
     private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val wifi = appContext.getSystemService(WifiManager::class.java)
     @Volatile private var boundTo: Network? = null
+    @Volatile private var lastSeen: String? = null
 
     /** The Wi-Fi/Ethernet network with an IPv4 address, or null when the phone is not on one. */
     fun current(): CurrentNetwork? {
@@ -53,6 +58,15 @@ class LocalNetworkProvider(context: Context) {
      * local network, so binding the whole process to the Wi-Fi is safe. Returns the network in use, or null.
      */
     fun prepare(network: CurrentNetwork? = current()): CurrentNetwork? {
+        val seen = when {
+            network == null -> "No Wi-Fi network"
+            network.isDefault -> "Wi-Fi ${network.cidr}"
+            else -> "Wi-Fi ${network.cidr} (not the default network: the app is bound to it)"
+        }
+        if (seen != lastSeen) {
+            lastSeen = seen
+            log.info(LogSource.NETWORK, seen)
+        }
         val cm = connectivity ?: return network
         try {
             val target = network?.network?.takeIf { !network.isDefault }
@@ -62,6 +76,7 @@ class LocalNetworkProvider(context: Context) {
             }
         } catch (e: RuntimeException) {
             Log.w(TAG, "Could not bind to the local network", e)
+            log.warn(LogSource.NETWORK, "Could not bind to the local network", e)
         }
         return network
     }
