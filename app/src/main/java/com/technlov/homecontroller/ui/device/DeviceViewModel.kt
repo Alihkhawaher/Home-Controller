@@ -1,5 +1,6 @@
 package com.technlov.homecontroller.ui.device
 
+import com.technlov.homecontroller.data.PowerButton
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.technlov.home.core.Capability
@@ -110,6 +111,10 @@ class DeviceViewModel(private val container: AppContainer, private val key: Devi
             val room = container.repository.addRoom(name)
             container.repository.updateDevice(key) { it.copy(roomId = room.id) }
         }
+    }
+
+    fun setPowerButton(mode: PowerButton) {
+        viewModelScope.launch { container.repository.updateDevice(key) { it.copy(powerButton = mode) } }
     }
 
     fun setHidden(hidden: Boolean) {

@@ -1,5 +1,9 @@
 package com.technlov.homecontroller.ui.home
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import com.technlov.homecontroller.ui.components.ConfirmDialog
+import com.technlov.homecontroller.data.PowerButton
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -117,6 +121,7 @@ import java.time.LocalTime
 
 @Composable
 fun HomeScreen(onOpenDevice: (DeviceKey) -> Unit, onFindDevices: () -> Unit, onPairDevice: (() -> Unit)?) {
+    var confirmPower by remember { mutableStateOf<DeviceTileUi?>(null) }
     val vm = appViewModel { HomeViewModel(it) }
     val ui by vm.ui.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -175,7 +180,10 @@ fun HomeScreen(onOpenDevice: (DeviceKey) -> Unit, onFindDevices: () -> Unit, onP
                     ui = ui,
                     gridState = gridState,
                     onOpenDevice = onOpenDevice,
-                    onTogglePower = { tile -> vm.setPower(tile.key, tile.name, !tile.isActive) },
+                    onTogglePower = { tile ->
+                        if (tile.powerButton == PowerButton.CONFIRM) confirmPower = tile
+                        else vm.setPower(tile.key, tile.name, !tile.isActive)
+                    },
                     onShowHidden = vm::setShowHidden,
                 )
             }
@@ -183,6 +191,21 @@ fun HomeScreen(onOpenDevice: (DeviceKey) -> Unit, onFindDevices: () -> Unit, onP
                 PullToRefreshContainer(state = pullState, modifier = Modifier.align(Alignment.TopCenter))
             }
         }
+    }
+
+    confirmPower?.let { tile ->
+        val turningOn = !tile.isActive
+        ConfirmDialog(
+            title = stringResource(if (turningOn) R.string.power_confirm_on else R.string.power_confirm_off, tile.name),
+            text = stringResource(R.string.power_confirm_text),
+            confirmLabel = stringResource(if (turningOn) R.string.action_turn_on else R.string.action_turn_off),
+            icon = Icons.Rounded.PowerSettingsNew,
+            onConfirm = {
+                confirmPower = null
+                vm.setPower(tile.key, tile.name, turningOn)
+            },
+            onDismiss = { confirmPower = null },
+        )
     }
 }
 
@@ -353,7 +376,7 @@ fun DeviceTile(tile: DeviceTileUi, onClick: () -> Unit, onTogglePower: () -> Uni
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                if (tile.hasPower) {
+                if (tile.hasPower && tile.powerButton != PowerButton.HIDE) {
                     TilePowerButton(on = active, enabled = !offline, accent = accent, onClick = onTogglePower)
                 }
             }

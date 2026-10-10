@@ -411,4 +411,19 @@
         <item quantity="one">%d device added to your home</item>
         <item quantity="other">%d devices added to your home</item>
     </plurals>
+
+    <!-- Power button: show / ask first / hide (per device) -->
+    <string name="device_menu_power_button">Power button…</string>
+    <string name="power_button_title">Power button</string>
+    <string name="power_button_show">Show</string>
+    <string name="power_button_show_text">One tap switches it, here and on the home screen</string>
+    <string name="power_button_confirm">Ask first</string>
+    <string name="power_button_confirm_text">Every tap asks before switching, here and on the home screen</string>
+    <string name="power_button_hide">Hide from the home screen</string>
+    <string name="power_button_hide_text">No power button on its home-screen tile; switch it on this page</string>
+    <string name="power_confirm_on">Turn on %1$s?</string>
+    <string name="power_confirm_off">Turn off %1$s?</string>
+    <string name="power_confirm_text">This device asks before its power changes. Change that in its menu: Power button.</string>
+    <string name="action_turn_on">Turn on</string>
+    <string name="action_turn_off">Turn off</string>
 </resources>

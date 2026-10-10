@@ -1,5 +1,6 @@
 package com.technlov.homecontroller.ui.home
 
+import com.technlov.homecontroller.data.PowerButton
 import com.technlov.home.core.Capability
 import com.technlov.home.core.DeviceCategory
 import com.technlov.home.core.DeviceKey
@@ -29,6 +30,7 @@ data class DeviceTileUi(
     val readoutLabel: String?,
     val hidden: Boolean,
     val busy: Boolean,
+    val powerButton: PowerButton = PowerButton.SHOW,
 ) {
     val isClimate: Boolean get() = category == DeviceCategory.CLIMATE || targetTemperature != null
     val isActive: Boolean get() = status != LinkStatus.OFFLINE && isOn == true
@@ -117,5 +119,6 @@ internal fun tileFor(device: SavedDevice, live: DeviceLive?): DeviceTileUi {
         readoutLabel = readoutLabel,
         hidden = device.hidden,
         busy = live?.busy == true,
+        powerButton = device.powerButton,
     )
 }

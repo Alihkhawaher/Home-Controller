@@ -18,9 +18,18 @@ data class SavedDevice(
     val order: Int = 0,
     /** The capabilities the device last reported, so its controls and the automation editor work while it is offline. */
     val capabilities: List<Capability> = emptyList(),
+    /** How the power button behaves for this device -- e.g. a plug that powers a PC is safer behind "Ask first". */
+    val powerButton: PowerButton = PowerButton.SHOW,
 ) {
     val key: DeviceKey get() = ref.key()
 }
+
+/**
+ * The power button's behaviour for one device. [SHOW]: one tap switches it. [CONFIRM]: every tap asks first, on the
+ * home screen and on the device's page. [HIDE]: not on the home screen at all; only on the device's page.
+ * Automations are deliberate and are never affected.
+ */
+enum class PowerButton { SHOW, CONFIRM, HIDE }
 
 data class Room(val id: String, val name: String, val order: Int = 0)
 

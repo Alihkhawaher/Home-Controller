@@ -29,7 +29,8 @@ class HomeJsonTest {
                 order = 0,
                 capabilities = climateCapabilities,
             ),
-            SavedDevice(ref = exampleRef("ac-2", "192.0.2.11"), name = "Office AC", hidden = true, order = 1),
+            SavedDevice(ref = exampleRef("ac-2", "192.0.2.11"), name = "Office AC", hidden = true, order = 1,
+                powerButton = PowerButton.CONFIRM),
         ),
         rooms = listOf(Room("room-1", "Bedroom", 0), Room("room-2", "Office", 1)),
         automations = listOf(
@@ -76,6 +77,16 @@ class HomeJsonTest {
     fun roundTripKeepsEverything() {
         val decoded = HomeJson.decode(HomeJson.encode(full))
         assertEquals(full, decoded)
+    }
+
+    @Test
+    fun powerButtonDefaultsToShowAndToleratesUnknownValues() {
+        val missing = """{"devices":[{"connectorId":"fake","id":"a","address":"192.0.2.9","name":"Plug"}]}"""
+        assertEquals(PowerButton.SHOW, HomeJson.decode(missing).devices.single().powerButton)
+        val unknown = """{"devices":[{"connectorId":"fake","id":"a","address":"192.0.2.9","name":"Plug","powerButton":"LATER"}]}"""
+        assertEquals(PowerButton.SHOW, HomeJson.decode(unknown).devices.single().powerButton)
+        val hidden = """{"devices":[{"connectorId":"fake","id":"a","address":"192.0.2.9","name":"Plug","powerButton":"HIDE"}]}"""
+        assertEquals(PowerButton.HIDE, HomeJson.decode(hidden).devices.single().powerButton)
     }
 
     @Test

@@ -58,6 +58,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.rounded.PowerSettingsNew
+import com.technlov.homecontroller.data.PowerButton
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,7 +107,7 @@ import com.technlov.homecontroller.ui.toUiText
 import com.technlov.homecontroller.ui.valueText
 import kotlinx.coroutines.delay
 
-private enum class DeviceDialog { RENAME, ROOM, REMOVE }
+private enum class DeviceDialog { RENAME, ROOM, POWER_BUTTON, REMOVE }
 
 @Composable
 fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
@@ -109,6 +117,7 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(vm.messages, snackbar)
     var dialog by rememberSaveable { mutableStateOf<DeviceDialog?>(null) }
+    var pendingPower by remember { mutableStateOf<Pair<List<SetValue>, String>?>(null) }
 
     val device = ui.device
     if (ui.loaded && device == null) {
@@ -142,8 +151,10 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
                     if (device != null) {
                         DeviceMenu(
                             hidden = device.hidden,
+                            hasPower = ui.capabilities.any { it is Capability.Power },
                             onRename = { dialog = DeviceDialog.RENAME },
                             onRoom = { dialog = DeviceDialog.ROOM },
+                            onPowerButton = { dialog = DeviceDialog.POWER_BUTTON },
                             onToggleHidden = { vm.setHidden(!device.hidden) },
                             onRemove = { dialog = DeviceDialog.REMOVE },
                         )
@@ -155,7 +166,16 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         if (device != null) {
-            DeviceContent(ui, device, retrying, padding, onApply = vm::apply, onRetry = vm::retry)
+            // "Ask first": a power change waits for a confirmation; everything else applies at once.
+            val powerKey = ui.capabilities.firstOrNull { it is Capability.Power }?.key
+            val guardedApply: (List<SetValue>, String) -> Unit = { changes, what ->
+                if (device.powerButton == PowerButton.CONFIRM && changes.any { it.key == powerKey }) {
+                    pendingPower = changes to what
+                } else {
+                    vm.apply(changes, what)
+                }
+            }
+            DeviceContent(ui, device, retrying, padding, onApply = guardedApply, onRetry = vm::retry)
         }
     }
 
@@ -185,6 +205,14 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
                 },
                 onDismiss = { dialog = null },
             )
+            DeviceDialog.POWER_BUTTON -> PowerButtonDialog(
+                selected = device.powerButton,
+                onPick = {
+                    vm.setPowerButton(it)
+                    dialog = null
+                },
+                onDismiss = { dialog = null },
+            )
             DeviceDialog.REMOVE -> ConfirmDialog(
                 title = stringResource(R.string.device_remove_title, device.name),
                 text = stringResource(R.string.device_remove_text),
@@ -198,14 +226,72 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
             )
             null -> Unit
         }
+        pendingPower?.let { (changes, what) ->
+            val turningOn = (changes.firstOrNull { it.key == powerKeyOf(ui) }?.value as? Value.Bool)?.v == true
+            ConfirmDialog(
+                title = stringResource(if (turningOn) R.string.power_confirm_on else R.string.power_confirm_off, device.name),
+                text = stringResource(R.string.power_confirm_text),
+                confirmLabel = stringResource(if (turningOn) R.string.action_turn_on else R.string.action_turn_off),
+                icon = Icons.Rounded.PowerSettingsNew,
+                onConfirm = {
+                    pendingPower = null
+                    vm.apply(changes, what)
+                },
+                onDismiss = { pendingPower = null },
+            )
+        }
     }
+}
+
+private fun powerKeyOf(ui: DeviceDetailUi): String? = ui.capabilities.firstOrNull { it is Capability.Power }?.key
+
+/** Show / Ask first / Hide, each with one line saying what it does. */
+@Composable
+private fun PowerButtonDialog(selected: PowerButton, onPick: (PowerButton) -> Unit, onDismiss: () -> Unit) {
+    val options = listOf(
+        PowerButton.SHOW to (R.string.power_button_show to R.string.power_button_show_text),
+        PowerButton.CONFIRM to (R.string.power_button_confirm to R.string.power_button_confirm_text),
+        PowerButton.HIDE to (R.string.power_button_hide to R.string.power_button_hide_text),
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Rounded.PowerSettingsNew, contentDescription = null) },
+        title = { Text(stringResource(R.string.power_button_title)) },
+        text = {
+            Column(Modifier.selectableGroup()) {
+                options.forEach { (mode, labels) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = mode == selected, role = Role.RadioButton, onClick = { onPick(mode) })
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = mode == selected, onClick = null)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(stringResource(labels.first), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(labels.second),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
+    )
 }
 
 @Composable
 private fun DeviceMenu(
     hidden: Boolean,
+    hasPower: Boolean,
     onRename: () -> Unit,
     onRoom: () -> Unit,
+    onPowerButton: () -> Unit,
     onToggleHidden: () -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -230,6 +316,16 @@ private fun DeviceMenu(
                 onRoom()
             },
         )
+        if (hasPower) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.device_menu_power_button)) },
+                leadingIcon = { Icon(Icons.Rounded.PowerSettingsNew, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onPowerButton()
+                },
+            )
+        }
         DropdownMenuItem(
             text = { Text(stringResource(if (hidden) R.string.device_menu_show else R.string.device_menu_hide)) },
             leadingIcon = {

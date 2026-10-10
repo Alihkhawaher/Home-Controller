@@ -59,6 +59,7 @@ internal data class DeviceDto(
     val hidden: Boolean = false,
     val order: Int = 0,
     val capabilities: List<CapabilityDto> = emptyList(),
+    val powerButton: String = "SHOW",
 )
 
 @Serializable
@@ -210,6 +211,7 @@ private fun SavedDevice.toDto() = DeviceDto(
     hidden = hidden,
     order = order,
     capabilities = capabilities.map { it.toDto() },
+    powerButton = powerButton.name,
 )
 
 private fun DeviceDto.toModel() = SavedDevice(
@@ -228,6 +230,7 @@ private fun DeviceDto.toModel() = SavedDevice(
     hidden = hidden,
     order = order,
     capabilities = capabilities.map { it.toModel() },
+    powerButton = enumOr(powerButton, PowerButton.SHOW),
 )
 
 private fun Capability.toDto(): CapabilityDto = when (this) {

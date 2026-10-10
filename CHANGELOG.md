@@ -4,6 +4,15 @@ All notable changes to Home Controller are recorded in this file. The format fol
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.3.1 — 2026-10-10
+
+### Added
+
+- Per-device power button setting (device menu → Power button): **Show** (one tap switches it), **Ask first**
+  (every tap asks before switching, on the home screen and on the device's page) or **Hide from the home screen**
+  (the tile has no power button; switch it on the device's page). For a plug that powers a computer, say.
+  Automations are never affected.
+
 ## 0.3.0 — 2026-10-10
 
 ### Added
