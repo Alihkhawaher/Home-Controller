@@ -145,6 +145,30 @@ class HubTest {
     }
 
     @Test
+    fun aSettingTheSessionKeepsWithTheDeviceIsSavedAfterAChange() = runTest {
+        val lines = mutableListOf<String>()
+        val logged = Hub(
+            ConnectorRegistry(listOf(connector)), repository, engine, events, ioContext = EmptyCoroutineContext,
+            log = object : EventLog {
+                override val verbose = false
+                override fun log(level: EventLog.Level, source: String, message: String, error: Throwable?) {
+                    lines += message
+                }
+            },
+        )
+        logged.refresh(listOf(ac))
+        assertTrue(logged.apply(ac, listOf(SetValue(FakeConnector.SETTING, Value.Bool(false)))).isSuccess)
+        assertEquals("0", store.value.device(ac)!!.ref.extras[FakeConnector.SETTING])
+        assertTrue(lines.contains("Bedroom AC: saved beep"))
+        assertTrue("the address did not change", lines.none { it.contains("found at") })
+
+        // Kept by the hub too: the next change starts from it, and an unchanged setting saves nothing.
+        lines.clear()
+        assertTrue(logged.apply(ac, listOf(SetValue(Keys.POWER, Value.Bool(true)))).isSuccess)
+        assertTrue(lines.none { it.contains("saved") })
+    }
+
+    @Test
     fun aRefusedChangeSnapsBack() = runTest {
         hub.refresh(listOf(ac))
         connector.failApplies = true

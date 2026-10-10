@@ -88,7 +88,7 @@ class FakeConnector(override val info: ConnectorInfo = ConnectorInfo("fake", "Fa
         }
         val updates = if (pushing) pushes.getOrPut(device.id) { MutableSharedFlow(extraBufferCapacity = 16) } else null
         return object : DeviceSession {
-            override val device = device
+            override var device: DeviceRef = device
             override val capabilities = climateCapabilities
             override fun updates(): Flow<DeviceState>? = updates
             override suspend fun read(): DeviceState {
@@ -98,9 +98,21 @@ class FakeConnector(override val info: ConnectorInfo = ConnectorInfo("fake", "Fa
             override suspend fun apply(changes: List<SetValue>): DeviceState {
                 applyGate?.await()
                 if (failApplies) throw IllegalStateException("refused")
-                changes.forEach { values[it.key] = it.value }
+                changes.forEach { change ->
+                    if (change.key == SETTING) {
+                        val on = (change.value as Value.Bool).v
+                        this.device = this.device.copy(extras = this.device.extras + (SETTING to if (on) "1" else "0"))
+                    } else {
+                        values[change.key] = change.value
+                    }
+                }
                 return DeviceState(values.toMap())
             }
         }
+    }
+
+    companion object {
+        /** A setting the session keeps with the device (in its extras), not a device value -- like Gree's beep. */
+        const val SETTING = "beep"
     }
 }

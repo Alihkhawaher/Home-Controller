@@ -220,6 +220,8 @@ class Hub(
                 result.onSuccess {
                     log.info(LogSource.HUB, "${slot.name}: set $what")
                     onSuccess(slot, it)
+                    // A setting the connector keeps with the device (Gree's beep) is saved, so a restart keeps it.
+                    slot.session?.let { session -> rememberWhereItIs(slot, slot.ref, session.device) }
                 }.onFailure { error ->
                     log.warn(LogSource.HUB, "${slot.name}: could not set $what: ${DeviceIssue.from(error).describe()}")
                     slot.closeSession()
@@ -408,15 +410,18 @@ class Hub(
     }
 
     /**
-     * The connector may have found the device at a new address (DHCP moved it, or an imported device had none yet)
-     * or learned something non-secret such as its protocol version: keep that, but never a plaintext secret.
+     * The connector may have found the device at a new address (DHCP moved it, or an imported device had none yet),
+     * learned something non-secret such as its protocol version, or changed a setting it keeps with the device (Gree's
+     * beep): keep that, but never a plaintext secret. Logs the address and the names of the saved extras, not values.
      */
     private suspend fun rememberWhereItIs(slot: Slot, stored: DeviceRef, used: DeviceRef) {
         val extras = stored.extras + SecretBox.withoutPlaintext(used.extras, stored.extras)
         if (used.address == stored.address && extras == stored.extras) return
         val updated = stored.copy(address = used.address, extras = extras)
         slot.ref = updated
-        log.info(LogSource.HUB, "${slot.name}: found at ${used.address}")
+        if (used.address != stored.address) log.info(LogSource.HUB, "${slot.name}: found at ${used.address}")
+        val saved = extras.filter { (k, v) -> stored.extras[k] != v }.keys.sorted()
+        if (saved.isNotEmpty()) log.info(LogSource.HUB, "${slot.name}: saved ${saved.joinToString()}")
         try {
             repository.refreshDeviceRef(updated)
         } catch (e: CancellationException) {
