@@ -11,13 +11,16 @@ import com.technlov.home.core.DeviceSession
 import com.technlov.home.core.DeviceState
 import com.technlov.home.core.EventLog
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunClock
 import com.technlov.home.core.info
 import com.technlov.home.core.key
 import com.technlov.home.core.latestTime
 import com.technlov.home.core.trace
 import com.technlov.home.core.warn
 import com.technlov.homecontroller.data.HomeData
+import com.technlov.homecontroller.data.HomeLocation
 import com.technlov.homecontroller.data.HomeRepository
+import com.technlov.homecontroller.data.sunClock
 import com.technlov.homecontroller.data.SecretBox
 import com.technlov.homecontroller.history.HistorySink
 import com.technlov.homecontroller.data.SavedDevice
@@ -77,6 +80,8 @@ class Hub(
     private val log: EventLog = EventLog.None,
     /** Power history: every successful reading is offered here (electrical readings are kept; the rest ignored). */
     private val history: HistorySink = HistorySink.None,
+    /** Sunrise and sunset at the home (none until its location is set), in the phone's time zone. */
+    private val sunClock: (HomeLocation?) -> SunClock = { it.sunClock() },
 ) {
     private data class SlotView(
         val status: LinkStatus,
@@ -228,14 +233,16 @@ class Hub(
     suspend fun tick(now: LocalDateTime) {
         val data = repository.current()
         val states = currentStates()
-        val due = engine.due(now, data.automations.filter { it.enabled }, states, previousStates, data.lastRuns, lastCheck)
+        val sun = sunClock(data.settings.homeLocation)
+        val enabled = data.automations.filter { it.enabled }
+        val due = engine.due(now, enabled, states, previousStates, data.lastRuns, lastCheck, sun)
         previousStates = states
         lastCheck = now
         for (automation in due) {
             // Saved before the actions run: whatever happens next (a crash, Android ending the app), a restart does
             // not run it again.
             recordRun(automation, now)
-            automation.trigger.latestTime(now)?.takeIf { it.isBefore(now.truncatedTo(ChronoUnit.MINUTES)) }?.let { missed ->
+            automation.trigger.latestTime(now, sun)?.takeIf { it.isBefore(now.truncatedTo(ChronoUnit.MINUTES)) }?.let { missed ->
                 log.info(LogSource.HUB, "Automation \"${automation.name}\": its ${missed.toLocalTime()} was missed; running it ${Duration.between(missed, now).toMinutes()} min late")
             }
             val done = execute(automation, data)

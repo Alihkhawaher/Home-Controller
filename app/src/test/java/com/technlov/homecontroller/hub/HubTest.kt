@@ -10,14 +10,18 @@ import com.technlov.home.core.DeviceState
 import com.technlov.home.core.EventLog
 import com.technlov.home.core.Keys
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunClock
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import com.technlov.homecontroller.FakeConnector
 import com.technlov.homecontroller.InMemoryDataStore
 import com.technlov.homecontroller.climateCapabilities
 import com.technlov.homecontroller.data.HomeData
+import com.technlov.homecontroller.data.HomeLocation
 import com.technlov.homecontroller.data.HomeRepository
 import com.technlov.homecontroller.data.SavedDevice
+import com.technlov.homecontroller.data.sunClock
 import com.technlov.homecontroller.exampleRef
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,6 +34,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlin.coroutines.EmptyCoroutineContext
 
 class HubTest {
@@ -65,6 +70,7 @@ class HubTest {
             previousStates: Map<DeviceKey, DeviceState>,
             lastRun: Map<String, LocalDateTime>,
             previousCheck: LocalDateTime?,
+            sun: SunClock,
         ): List<Automation> {
             seenPrevious = previousStates
             seenPreviousCheck = previousCheck
@@ -273,6 +279,29 @@ class HubTest {
         restarted.tick(at(7, 34))
         assertEquals(2, notifications.size)
         assertEquals(at(7, 33), store.value.lastRuns["m"])
+    }
+
+    // ---- sunrise / sunset ----
+
+    @Test
+    fun aSunsetScheduleWaitsForTheHomeLocationThenRunsAtSunsetMinusItsOffset() = runTest {
+        val london = ZoneId.of("Europe/London")
+        val hub = Hub(
+            ConnectorRegistry(listOf(connector)), repository, DefaultAutomationEngine(), events,
+            ioContext = EmptyCoroutineContext, sunClock = { it.sunClock(london) },
+        )
+        val dusk = Automation("dusk", "Dusk", trigger = Trigger.Sun(SunEvent.SUNSET, -15), actions = listOf(Action.Notify("Dusk", "x")))
+        repository.saveAutomation(dusk)
+        hub.tick(LocalDateTime.of(2026, 6, 21, 21, 6))
+        assertTrue("no location yet: a sun schedule cannot run", notifications.isEmpty())
+
+        // Greenwich, rounded to 51.48, 0.00: on 22 June the sun sets at 21:21, so the schedule is due at 21:06.
+        repository.updateSettings { it.copy(homeLocation = HomeLocation.of(51.4779, -0.0015)) }
+        hub.tick(LocalDateTime.of(2026, 6, 22, 21, 5))
+        assertTrue(notifications.isEmpty())
+        hub.tick(LocalDateTime.of(2026, 6, 22, 21, 6))
+        hub.tick(LocalDateTime.of(2026, 6, 22, 21, 7))
+        assertEquals(listOf("Dusk" to "x"), notifications)
     }
 
     // ---- run once ----

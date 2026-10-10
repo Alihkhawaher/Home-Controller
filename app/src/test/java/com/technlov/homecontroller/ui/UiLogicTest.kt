@@ -7,6 +7,7 @@ import com.technlov.home.core.DeviceState
 import com.technlov.home.core.Keys
 import com.technlov.home.core.Op
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import com.technlov.homecontroller.climateCapabilities
@@ -106,6 +107,8 @@ class UiLogicTest {
         assertEquals(time, AutomationDraft.from(time).toAutomation("unused"))
         val once = time.copy(id = "o", runOnce = true)
         assertEquals(once, AutomationDraft.from(once).toAutomation("unused"))
+        val sun = time.copy(id = "s", trigger = Trigger.Sun(SunEvent.SUNRISE, 45, setOf(DayOfWeek.SUNDAY)))
+        assertEquals(sun, AutomationDraft.from(sun).toAutomation("unused"))
 
         val state = Automation(
             "s", "Hot",
@@ -113,6 +116,21 @@ class UiLogicTest {
             actions = listOf(Action.Notify("Hot", "It is hot")),
         )
         assertEquals(state, AutomationDraft.from(state).toAutomation("unused"))
+    }
+
+    @Test
+    fun aSunDraftStepsItsOffsetWithinThreeHoursAndKeepsTheDays() {
+        val draft = AutomationDraft(id = "x", isNew = true, days = setOf(DayOfWeek.FRIDAY))
+            .copy(kind = TriggerKind.SUN, sunEvent = SunEvent.SUNSET)
+        assertEquals(Trigger.Sun(SunEvent.SUNSET, -15, setOf(DayOfWeek.FRIDAY)), draft.withOffsetBy(-15).timedTrigger())
+        assertEquals(Trigger.Sun.MAX_OFFSET_MINUTES, draft.withOffsetBy(500).offsetMinutes)
+        assertEquals(-Trigger.Sun.MAX_OFFSET_MINUTES, draft.withOffsetBy(-500).offsetMinutes)
+        // Switching back to a clock time keeps the days; a device trigger has no time.
+        assertEquals(Trigger.TimeOfDay(7, 0, setOf(DayOfWeek.FRIDAY)), draft.copy(kind = TriggerKind.TIME).timedTrigger())
+        assertNull(draft.copy(kind = TriggerKind.DEVICE).timedTrigger())
+        // A sun draft can be saved without a location: it waits for one.
+        val saved = draft.copy(actions = listOf(Action.Notify("Dusk", ""))).toAutomation("At sunset")!!
+        assertEquals(Trigger.Sun(SunEvent.SUNSET, 0, setOf(DayOfWeek.FRIDAY)), saved.trigger)
     }
 
     @Test

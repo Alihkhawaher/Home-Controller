@@ -44,6 +44,8 @@ data class AppSettings(
     val dynamicColor: Boolean = true,
     /** Diagnostics: also record every message to and from devices (the log grows faster). */
     val verboseLogging: Boolean = false,
+    /** Where the home is, for sunrise and sunset schedules; null until the user sets it (they don't run till then). */
+    val homeLocation: HomeLocation? = null,
 ) {
     companion object {
         const val DEFAULT_FOREGROUND_POLL = 10

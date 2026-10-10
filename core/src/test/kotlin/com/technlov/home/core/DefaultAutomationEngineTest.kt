@@ -1,6 +1,7 @@
 package com.technlov.home.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
@@ -34,7 +35,13 @@ class DefaultAutomationEngineTest {
         previous: Map<DeviceKey, DeviceState> = emptyMap(),
         lastRun: Map<String, LocalDateTime> = emptyMap(),
         since: LocalDateTime? = null,
-    ) = engine.due(now, a, states, previous, lastRun, since).map { it.id }
+        sun: SunClock = SunClock.UNKNOWN,
+    ) = engine.due(now, a, states, previous, lastRun, since, sun).map { it.id }
+
+    /** A home where the sun rises at 05:50 and sets at 17:42 every day. */
+    private val sun = SunClock { event, date ->
+        if (event == SunEvent.SUNRISE) date.atTime(5, 50) else date.atTime(17, 42)
+    }
 
     // ---- time of day ----
 
@@ -139,6 +146,68 @@ class DefaultAutomationEngineTest {
         // The phone's clock was a day ahead and was corrected: the last check and the last run lie "in the future".
         val a = listOf(auto(Trigger.TimeOfDay(7, 30)))
         assertEquals(listOf("a1"), due(a, at(7, 30), lastRun = mapOf("a1" to at(7, 30, day = 13)), since = at(7, 45, day = 13)))
+    }
+
+    // ---- sunrise / sunset ----
+
+    @Test
+    fun aSunTriggerFiresAtItsSunTimePlusTheOffset() {
+        val beforeSunset = listOf(auto(Trigger.Sun(SunEvent.SUNSET, -15)))
+        assertEquals(listOf("a1"), due(beforeSunset, at(17, 27), sun = sun))
+        assertEquals(emptyList<String>(), due(beforeSunset, at(17, 26), sun = sun))
+        assertEquals("the sunset itself is not its time", emptyList<String>(), due(beforeSunset, at(17, 42), since = at(17, 41), sun = sun))
+        val afterSunrise = listOf(auto(Trigger.Sun(SunEvent.SUNRISE, 30)))
+        assertEquals(listOf("a1"), due(afterSunrise, at(6, 20), sun = sun))
+        val atSunrise = listOf(auto(Trigger.Sun(SunEvent.SUNRISE)))
+        assertEquals(listOf("a1"), due(atSunrise, at(5, 50, 59), sun = sun))
+    }
+
+    @Test
+    fun aSunTriggerKeepsToItsDaysAndRunsOncePerDay() {
+        // 2026-10-16 is a Friday, the 17th a Saturday, the 18th a Sunday.
+        val weekend = listOf(auto(Trigger.Sun(SunEvent.SUNSET, 0, setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY))))
+        assertEquals(listOf("a1"), due(weekend, at(17, 42, day = 16), sun = sun))
+        assertEquals(listOf("a1"), due(weekend, at(17, 42, day = 17), sun = sun))
+        assertEquals(emptyList<String>(), due(weekend, at(17, 42, day = 18), sun = sun))
+        val ran = mapOf("a1" to at(17, 42, day = 16))
+        assertEquals(emptyList<String>(), due(weekend, at(17, 42, 30, day = 16), lastRun = ran, sun = sun))
+    }
+
+    @Test
+    fun withoutSunTimesASunTriggerNeverFires() {
+        // No location set: SunClock.UNKNOWN.
+        val a = listOf(auto(Trigger.Sun(SunEvent.SUNSET)))
+        for (h in 0..23) assertEquals("hour $h", emptyList<String>(), due(a, at(h, 42)))
+        // Polar night: the place is known, but the sun does not rise.
+        val noSunrise = SunClock { event, date -> if (event == SunEvent.SUNSET) date.atTime(14, 0) else null }
+        val sunrise = listOf(auto(Trigger.Sun(SunEvent.SUNRISE)))
+        for (h in 0..23) assertEquals("hour $h", emptyList<String>(), due(sunrise, at(h, 0), sun = noSunrise))
+    }
+
+    @Test
+    fun aMissedSunTimeIsCaughtUpLikeAClockTime() {
+        val a = listOf(auto(Trigger.Sun(SunEvent.SUNSET, -15)))
+        assertEquals(listOf("a1"), due(a, at(17, 30), since = at(17, 20), sun = sun))
+        assertEquals("23 minutes late", emptyList<String>(), due(a, at(17, 50), since = at(17, 20), sun = sun))
+    }
+
+    @Test
+    fun anOffsetPastMidnightBelongsToTheDayOfItsSunset() {
+        // Far north in summer the sun sets at 23:00; two hours later is 01:00 the next morning.
+        val lateSunset = SunClock { event, date -> if (event == SunEvent.SUNSET) date.atTime(23, 0) else null }
+        val friday = listOf(auto(Trigger.Sun(SunEvent.SUNSET, 120, setOf(DayOfWeek.FRIDAY))))
+        assertEquals(listOf("a1"), due(friday, at(1, 0, day = 17), sun = lateSunset)) // Friday's sunset, Saturday 01:00
+        assertEquals(emptyList<String>(), due(friday, at(1, 0, day = 16), sun = lateSunset)) // Thursday's
+    }
+
+    @Test
+    fun nextAndLatestTimesFollowTheSun() {
+        val friday = Trigger.Sun(SunEvent.SUNSET, -15, setOf(DayOfWeek.FRIDAY))
+        assertEquals(at(17, 27, day = 16), friday.nextTime(at(12, 0, day = 12), sun))
+        assertEquals(at(17, 27, day = 16), friday.latestTime(at(18, 0, day = 16), sun))
+        assertNull(friday.nextTime(at(12, 0), SunClock.UNKNOWN))
+        assertEquals(at(7, 30, day = 13), Trigger.TimeOfDay(7, 30).nextTime(at(7, 30)))
+        assertNull(Trigger.StateMatches(ac, Keys.POWER, Op.EQ, Value.Bool(true)).nextTime(at(7, 30), sun))
     }
 
     @Test

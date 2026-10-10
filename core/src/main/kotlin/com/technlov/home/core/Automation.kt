@@ -33,19 +33,54 @@ sealed interface Trigger {
     /** At a time of day, on the given days (empty = every day). */
     data class TimeOfDay(val hour: Int, val minute: Int, val days: Set<DayOfWeek> = emptySet()) : Trigger
 
+    /**
+     * At sunrise or sunset at the home, moved by [offsetMinutes] (negative = before: sunset - 15 min), on the given
+     * days (empty = every day). The sun's times come from a [SunClock]: without the home's location it never fires.
+     */
+    data class Sun(val event: SunEvent, val offsetMinutes: Int = 0, val days: Set<DayOfWeek> = emptySet()) : Trigger {
+        companion object {
+            /** The furthest a sun trigger may be moved from the sunrise or sunset, either way. */
+            const val MAX_OFFSET_MINUTES = 180
+        }
+    }
+
     /** When a device value crosses into a state, e.g. room temperature >= 30. */
     data class StateMatches(val device: DeviceKey, val key: String, val op: Op, val value: Value) : Trigger
 }
 
-/** The time a time trigger is set for on [date], or null: a day it is not set for, or a trigger without a time. */
-fun Trigger.timeOn(date: LocalDate): LocalDateTime? = when (this) {
+enum class SunEvent { SUNRISE, SUNSET }
+
+/**
+ * When the sun rises and sets at the home, in the phone's local time. Worked out on the phone ([SolarClock]); no
+ * service is asked.
+ */
+fun interface SunClock {
+    /** The minute of [event] on [date], or null: the home's location is not known, or the sun does not rise or set. */
+    fun time(event: SunEvent, date: LocalDate): LocalDateTime?
+
+    companion object {
+        /** No location yet: sun triggers do not fire. */
+        val UNKNOWN = SunClock { _, _ -> null }
+    }
+}
+
+/**
+ * The time a time or sun trigger is set for on [date] (for a sun trigger, the day of the sunrise or sunset), or
+ * null: a day it is not set for, a sun time [sun] does not know, or a trigger without a time.
+ */
+fun Trigger.timeOn(date: LocalDate, sun: SunClock = SunClock.UNKNOWN): LocalDateTime? = when (this) {
     is Trigger.TimeOfDay -> if (days.isEmpty() || date.dayOfWeek in days) date.atTime(hour, minute) else null
+    is Trigger.Sun -> if (days.isEmpty() || date.dayOfWeek in days) sun.time(event, date)?.plusMinutes(offsetMinutes.toLong()) else null
     is Trigger.StateMatches -> null
 }
 
-/** The latest time at or before [now] that a time trigger was set for (today's, or yesterday's), or null. */
-fun Trigger.latestTime(now: LocalDateTime): LocalDateTime? =
-    (-1L..0L).mapNotNull { timeOn(now.toLocalDate().plusDays(it)) }.filter { !it.isAfter(now) }.maxOrNull()
+/** The latest time at or before [now] that a time or sun trigger was set for (about a day back at most), or null. */
+fun Trigger.latestTime(now: LocalDateTime, sun: SunClock = SunClock.UNKNOWN): LocalDateTime? =
+    (-1L..1L).mapNotNull { timeOn(now.toLocalDate().plusDays(it), sun) }.filter { !it.isAfter(now) }.maxOrNull()
+
+/** The next time after [after] that a time or sun trigger is set for, looking a week ahead, or null. */
+fun Trigger.nextTime(after: LocalDateTime, sun: SunClock = SunClock.UNKNOWN): LocalDateTime? =
+    (-1L..8L).mapNotNull { timeOn(after.toLocalDate().plusDays(it), sun) }.filter { it.isAfter(after) }.minOrNull()
 
 sealed interface Condition {
     data class StateCompare(val device: DeviceKey, val key: String, val op: Op, val value: Value) : Condition
@@ -66,7 +101,8 @@ sealed interface Action {
  * state stays true. A time trigger fires once for each time it is set for: [lastRun] (when each automation last
  * ran; the app keeps it across restarts) says whether it already ran, and [previousCheck] (when the hub last asked;
  * null right after a start) tells a time the hub missed -- Android dozed, or the app was restarted -- from one it
- * saw. A missed time still runs if the hub is back within a short window.
+ * saw. A missed time still runs if the hub is back within a short window. [sun] gives the sunrise and sunset times
+ * for sun triggers.
  */
 interface AutomationEngine {
     fun due(
@@ -76,5 +112,6 @@ interface AutomationEngine {
         previousStates: Map<DeviceKey, DeviceState>,
         lastRun: Map<String, LocalDateTime>,
         previousCheck: LocalDateTime? = null,
+        sun: SunClock = SunClock.UNKNOWN,
     ): List<Automation>
 }

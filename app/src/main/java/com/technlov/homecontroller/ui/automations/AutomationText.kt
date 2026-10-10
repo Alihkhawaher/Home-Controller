@@ -6,6 +6,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.technlov.home.core.Action
 import com.technlov.home.core.Op
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.homecontroller.R
 import com.technlov.homecontroller.ui.valueText
@@ -46,6 +47,52 @@ fun daysText(days: Set<DayOfWeek>): String = when {
     else -> localWeek().filter { it in days }.joinToString(", ") { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
 }
 
+/** "15 min", "1 h", "1 h 30 min". */
+@Composable
+fun durationText(minutes: Int): String {
+    val hours = minutes / 60
+    val rest = minutes % 60
+    return when {
+        hours == 0 -> stringResource(R.string.interval_minutes, rest)
+        rest == 0 -> stringResource(R.string.duration_hours, hours)
+        else -> stringResource(R.string.duration_hours_minutes, hours, rest)
+    }
+}
+
+/** For the editor and automatic names: "At sunset", "15 min before sunset", "1 h after sunrise". */
+@Composable
+fun sunOffsetText(event: SunEvent, offsetMinutes: Int): String {
+    val sunrise = event == SunEvent.SUNRISE
+    return when {
+        offsetMinutes == 0 -> stringResource(if (sunrise) R.string.sun_at_sunrise else R.string.sun_at_sunset)
+        offsetMinutes < 0 ->
+            stringResource(if (sunrise) R.string.sun_before_sunrise else R.string.sun_before_sunset, durationText(-offsetMinutes))
+        else -> stringResource(if (sunrise) R.string.sun_after_sunrise else R.string.sun_after_sunset, durationText(offsetMinutes))
+    }
+}
+
+/** For summaries: "Sunset", "Sunset − 15 min", "Sunrise + 1 h". */
+@Composable
+fun sunShortText(event: SunEvent, offsetMinutes: Int): String {
+    val name = stringResource(if (event == SunEvent.SUNRISE) R.string.sun_sunrise else R.string.sun_sunset)
+    return when {
+        offsetMinutes == 0 -> name
+        offsetMinutes < 0 -> stringResource(R.string.sun_short_before, name, durationText(-offsetMinutes))
+        else -> stringResource(R.string.sun_short_after, name, durationText(offsetMinutes))
+    }
+}
+
+/** "today at 17:27", "tomorrow at 05:50", "Fri at 17:27". */
+@Composable
+fun whenText(at: LocalDateTime, today: LocalDate = LocalDate.now()): String {
+    val time = formatTime(at.hour, at.minute)
+    return when (at.toLocalDate()) {
+        today -> stringResource(R.string.when_today, time)
+        today.plusDays(1) -> stringResource(R.string.when_tomorrow, time)
+        else -> stringResource(R.string.when_day, at.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()), time)
+    }
+}
+
 /** The days a schedule repeats on -- or, for a run-once automation, "Once" (on the next of those days). */
 @Composable
 fun repeatText(days: Set<DayOfWeek>, runOnce: Boolean): String = when {
@@ -70,6 +117,8 @@ fun opText(op: Op): String = stringResource(
 fun triggerSummary(trigger: Trigger, devices: List<DeviceOption>, runOnce: Boolean = false): String = when (trigger) {
     is Trigger.TimeOfDay ->
         stringResource(R.string.trigger_time_summary, formatTime(trigger.hour, trigger.minute), repeatText(trigger.days, runOnce))
+    is Trigger.Sun ->
+        stringResource(R.string.summary_pair, sunShortText(trigger.event, trigger.offsetMinutes), repeatText(trigger.days, runOnce))
     is Trigger.StateMatches -> {
         val device = devices.firstOrNull { it.key == trigger.device }
         val capability = device?.capability(trigger.key)

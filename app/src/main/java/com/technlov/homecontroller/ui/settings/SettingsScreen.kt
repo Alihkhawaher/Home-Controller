@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
@@ -48,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -60,12 +62,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.technlov.home.core.SunEvent
 import com.technlov.homecontroller.BuildConfig
 import com.technlov.homecontroller.R
 import com.technlov.homecontroller.data.AppSettings
+import com.technlov.homecontroller.data.HomeLocation
 import com.technlov.homecontroller.data.ThemeMode
+import com.technlov.homecontroller.data.sunClock
 import com.technlov.homecontroller.ui.OnResume
 import com.technlov.homecontroller.ui.appViewModel
+import com.technlov.homecontroller.ui.automations.formatTime
 import com.technlov.homecontroller.ui.components.ConfirmDialog
 import com.technlov.homecontroller.ui.components.GroupCard
 import com.technlov.homecontroller.ui.components.SectionHeader
@@ -74,6 +80,7 @@ import com.technlov.homecontroller.ui.onlineColor
 import com.technlov.homecontroller.ui.openBatteryOptimizationSettings
 import com.technlov.homecontroller.ui.rememberNotificationAccess
 import com.technlov.homecontroller.ui.theme.supportsDynamicColor
+import java.time.LocalDate
 
 @Composable
 fun SettingsScreen(
@@ -90,6 +97,7 @@ fun SettingsScreen(
     var batteryOk by remember { mutableStateOf(ignoringBatteryOptimizations(context)) }
     OnResume { batteryOk = ignoringBatteryOptimizations(context) }
     var offerBattery by remember { mutableStateOf(false) }
+    var pickLocation by rememberSaveable { mutableStateOf(false) }
     val notifications = rememberNotificationAccess { if (!batteryOk) offerBattery = true }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -214,6 +222,14 @@ fun SettingsScreen(
                         text = pluralStringResource(R.plurals.rooms_count, ui.rooms.size, ui.rooms.size),
                         onClick = onOpenRooms,
                     )
+                    RowDivider()
+                    NavRow(
+                        icon = Icons.Rounded.WbTwilight,
+                        title = stringResource(R.string.settings_home_location),
+                        text = homeLocationText(settings.homeLocation),
+                        onClick = { pickLocation = true },
+                        maxLines = 2,
+                    )
                 }
             }
 
@@ -245,6 +261,17 @@ fun SettingsScreen(
         }
     }
 
+    if (pickLocation) {
+        HomeLocationDialog(
+            current = settings.homeLocation,
+            onSave = { location ->
+                vm.update { it.copy(homeLocation = location) }
+                pickLocation = false
+            },
+            onDismiss = { pickLocation = false },
+        )
+    }
+
     if (offerBattery) {
         ConfirmDialog(
             title = stringResource(R.string.battery_dialog_title),
@@ -258,6 +285,23 @@ fun SettingsScreen(
             onDismiss = { offerBattery = false },
         )
     }
+}
+
+/** "51.48, 0.00 · today sunrise 04:43, sunset 21:21", or that it is not set. */
+@Composable
+private fun homeLocationText(location: HomeLocation?): String {
+    if (location == null) return stringResource(R.string.settings_home_location_none)
+    val sun = remember(location) { location.sunClock() }
+    val today = LocalDate.now()
+    val sunrise = sun.time(SunEvent.SUNRISE, today)
+    val sunset = sun.time(SunEvent.SUNSET, today)
+    if (sunrise == null || sunset == null) return location.text()
+    return stringResource(
+        R.string.settings_home_location_today,
+        location.text(),
+        formatTime(sunrise.hour, sunrise.minute),
+        formatTime(sunset.hour, sunset.minute),
+    )
 }
 
 @Composable
@@ -283,10 +327,10 @@ private fun SwitchRow(icon: ImageVector, title: String, text: String?, checked: 
 }
 
 @Composable
-private fun NavRow(icon: ImageVector, title: String, text: String?, onClick: () -> Unit) {
+private fun NavRow(icon: ImageVector, title: String, text: String?, onClick: () -> Unit, maxLines: Int = 1) {
     ListItem(
         headlineContent = { Text(title) },
-        supportingContent = text?.let { { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
+        supportingContent = text?.let { { Text(it, maxLines = maxLines, overflow = TextOverflow.Ellipsis) } },
         leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),

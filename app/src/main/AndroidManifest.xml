@@ -12,7 +12,9 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- Pairing a new device: scan for its setup hotspot and join it for a moment. Location is what Android requires
-         for Wi-Fi scan results; the app never asks where the phone is. Asked only on the "Set up a new device" screen. -->
+         for Wi-Fi scan results; asked only on the "Set up a new device" screen, where the app never reads where the
+         phone is. Approximate location is also asked when the user taps "Use this phone's location" for the home's
+         sunrise and sunset: read once, rounded, kept on the phone, never tracked. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

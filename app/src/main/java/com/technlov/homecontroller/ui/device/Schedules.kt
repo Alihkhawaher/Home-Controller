@@ -31,17 +31,20 @@ import com.technlov.home.core.Trigger
 import com.technlov.homecontroller.R
 import com.technlov.homecontroller.ui.automations.formatTime
 import com.technlov.homecontroller.ui.automations.repeatText
+import com.technlov.homecontroller.ui.automations.sunShortText
 import com.technlov.homecontroller.ui.valueText
 
 /**
- * The device's schedules: "at this time, on these days, set this". Each is an ordinary automation, so it runs in
- * the hub on the phone (no cloud, no Wi-Fi needed on the device's side) and also shows in Automations.
+ * The device's schedules: "at this time (or at sunrise / sunset), on these days, set this". Each is an ordinary
+ * automation, so it runs in the hub on the phone (no cloud, no Wi-Fi needed on the device's side) and also shows in
+ * Automations.
  */
 @Composable
 fun SchedulesCard(
     schedules: List<Automation>,
     capabilities: List<Capability>,
     runInBackground: Boolean,
+    hasHomeLocation: Boolean,
     onOpen: (String?) -> Unit,
     onEnabled: (String, Boolean) -> Unit,
     onOpenSettings: () -> Unit,
@@ -77,7 +80,11 @@ fun SchedulesCard(
                 )
             }
             schedules.forEach { automation ->
-                val time = automation.trigger as? Trigger.TimeOfDay ?: return@forEach
+                val (title, days) = when (val t = automation.trigger) {
+                    is Trigger.TimeOfDay -> formatTime(t.hour, t.minute) to t.days
+                    is Trigger.Sun -> sunShortText(t.event, t.offsetMinutes) to t.days
+                    is Trigger.StateMatches -> return@forEach
+                }
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -88,15 +95,22 @@ fun SchedulesCard(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            formatTime(time.hour, time.minute),
+                            title,
                             style = MaterialTheme.typography.titleMedium,
                             color = if (automation.enabled) scheme.onSurface else scheme.onSurfaceVariant,
                         )
                         Text(
-                            repeatText(time.days, automation.runOnce) + " · " + changesText(automation, capabilities),
+                            repeatText(days, automation.runOnce) + " · " + changesText(automation, capabilities),
                             style = MaterialTheme.typography.bodySmall,
                             color = scheme.onSurfaceVariant,
                         )
+                        if (automation.trigger is Trigger.Sun && !hasHomeLocation) {
+                            Text(
+                                stringResource(R.string.sun_needs_location_short),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.error,
+                            )
+                        }
                     }
                     Switch(checked = automation.enabled, onCheckedChange = { onEnabled(automation.id, it) })
                 }

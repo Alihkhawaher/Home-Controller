@@ -8,12 +8,14 @@ import com.technlov.home.core.DeviceCategory
 import com.technlov.home.core.Keys
 import com.technlov.home.core.Op
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import com.technlov.homecontroller.climateCapabilities
 import com.technlov.homecontroller.exampleRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
@@ -65,6 +67,12 @@ class HomeJsonTest {
                 actions = listOf(Action.Notify("Hot", "Office is above 30")),
                 runOnce = true,
             ),
+            Automation(
+                id = "a3",
+                name = "Before sunset",
+                trigger = Trigger.Sun(SunEvent.SUNSET, -15, setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY)),
+                actions = listOf(Action.SetValues("fake:ac-1", listOf(SetValue(Keys.POWER, Value.Bool(false))))),
+            ),
         ),
         settings = AppSettings(
             runInBackground = true,
@@ -73,8 +81,9 @@ class HomeJsonTest {
             theme = ThemeMode.DARK,
             dynamicColor = false,
             verboseLogging = true,
+            homeLocation = HomeLocation(51.48, -0.01),
         ),
-        lastRuns = mapOf("a1" to LocalDateTime.of(2026, 10, 12, 6, 45), "a2" to LocalDateTime.of(2026, 10, 11, 14, 3, 27)),
+        lastRuns =mapOf("a1" to LocalDateTime.of(2026, 10, 12, 6, 45), "a2" to LocalDateTime.of(2026, 10, 11, 14, 3, 27)),
     )
 
     @Test
@@ -108,6 +117,21 @@ class HomeJsonTest {
         val json = """{"lastRuns":{"a":"2026-10-12T07:30","b":"yesterday"}}"""
         assertEquals(mapOf("a" to LocalDateTime.of(2026, 10, 12, 7, 30)), HomeJson.decode(json).lastRuns)
         assertTrue("saved before runs were kept", HomeJson.decode("""{"automations":[]}""").lastRuns.isEmpty())
+    }
+
+    @Test
+    fun sunTriggersAndTheHomeLocationAreStoredReadablyAndCheckedOnLoad() {
+        val text = HomeJson.encode(full)
+        assertTrue(text.contains("""{"type":"sun","event":"SUNSET","offsetMinutes":-15,"days":["FRIDAY","SATURDAY"]}"""))
+        assertTrue(text.contains(""""homeLocation":{"latitude":51.48,"longitude":-0.01}"""))
+        assertNull("saved before sun schedules: no location", HomeJson.decode("""{"settings":{"theme":"DARK"}}""").settings.homeLocation)
+
+        val odd = """{"automations":[{"id":"s","name":"n","trigger":{"type":"sun","event":"DAWN","offsetMinutes":900},
+            "actions":[{"type":"notify","title":"t","text":"x"}]}],
+            "settings":{"homeLocation":{"latitude":123.0,"longitude":10.0}}}"""
+        val data = HomeJson.decode(odd)
+        assertEquals(Trigger.Sun(SunEvent.SUNSET, Trigger.Sun.MAX_OFFSET_MINUTES), data.automations.single().trigger)
+        assertNull("a place off the map is dropped", data.settings.homeLocation)
     }
 
     @Test

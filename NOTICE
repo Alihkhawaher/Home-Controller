@@ -17,6 +17,11 @@ The OWON PC321-TY energy-meter data-point map and the native timer formats
 use provided the copyright and permission notices are kept; the full texts are
 at the links above.
 
+Sunrise and sunset times for sun schedules are computed on the phone with
+commons-suncalc (https://github.com/shred/commons-suncalc), Apache License 2.0,
+Copyright (C) 2017-2024 Richard "Shred" Körber. It is used as a library; no
+code is copied.
+
 Gree, Tuya and other brand names are trademarks of their respective owners. Home
 Controller is an independent project and is not affiliated with or endorsed
 by any device maker.

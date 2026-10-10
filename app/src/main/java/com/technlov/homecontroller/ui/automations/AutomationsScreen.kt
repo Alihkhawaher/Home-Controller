@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Sensors
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -106,6 +107,7 @@ fun AutomationsScreen(onEdit: (String?) -> Unit) {
                         automation = automation,
                         devices = ui.devices,
                         lastRun = ui.lastRuns[automation.id],
+                        needsLocation = automation.trigger is Trigger.Sun && !ui.hasHomeLocation,
                         onClick = { onEdit(automation.id) },
                         onEnabled = { vm.setEnabled(automation.id, it) },
                         modifier = Modifier.animateItemPlacement(),
@@ -121,6 +123,7 @@ private fun AutomationCard(
     automation: Automation,
     devices: List<DeviceOption>,
     lastRun: LocalDateTime?,
+    needsLocation: Boolean,
     onClick: () -> Unit,
     onEnabled: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -138,7 +141,11 @@ private fun AutomationCard(
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             IconBadge(
-                icon = if (automation.trigger is Trigger.TimeOfDay) Icons.Rounded.Schedule else Icons.Rounded.Sensors,
+                icon = when (automation.trigger) {
+                    is Trigger.TimeOfDay -> Icons.Rounded.Schedule
+                    is Trigger.Sun -> Icons.Rounded.WbTwilight
+                    is Trigger.StateMatches -> Icons.Rounded.Sensors
+                },
                 tint = if (automation.enabled) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
                 container = if (automation.enabled) scheme.primaryContainer else scheme.surfaceContainerHighest,
             )
@@ -159,6 +166,10 @@ private fun AutomationCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                }
+                if (needsLocation) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(R.string.sun_needs_location_short), style = MaterialTheme.typography.labelSmall, color = scheme.error)
                 }
                 if (lastRun != null) {
                     Spacer(Modifier.height(6.dp))

@@ -14,6 +14,8 @@ import java.time.temporal.ChronoUnit
  *    hub checked on time is never retried later, even if a condition did not hold then. Right after a start (no
  *    previous check) a late run also needs a saved last run, so a time that may have run before an app update is not
  *    run again. Never twice: not again once [lastRun] is at or after that time.
+ *  - [Trigger.Sun] follows the same rules, at the [SunClock]'s sunrise or sunset (plus its offset) on its days. With
+ *    no sun times (no location; the sun does not set that day) it does not fire.
  *  - [Trigger.StateMatches] fires on the edge: the comparison is true in the current state and was not true in the
  *    previous one (a missing previous state or value counts as not true).
  *  - [Condition.StateCompare] checks the current state; [Condition.TimeBetween] is from-inclusive, to-exclusive, may
@@ -31,11 +33,12 @@ class DefaultAutomationEngine(private val catchUp: Duration = CATCH_UP) : Automa
         previousStates: Map<DeviceKey, DeviceState>,
         lastRun: Map<String, LocalDateTime>,
         previousCheck: LocalDateTime?,
+        sun: SunClock,
     ): List<Automation> {
         val since = previousCheck?.takeUnless { it.isAfter(now) }
         return automations.filter { a ->
             a.enabled &&
-                fires(a, now, states, previousStates, lastRun[a.id]?.takeUnless { it.isAfter(now) }, since) &&
+                fires(a, now, states, previousStates, lastRun[a.id]?.takeUnless { it.isAfter(now) }, since, sun) &&
                 a.conditions.all { holds(it, now, states) }
         }
     }
@@ -47,8 +50,9 @@ class DefaultAutomationEngine(private val catchUp: Duration = CATCH_UP) : Automa
         previousStates: Map<DeviceKey, DeviceState>,
         ranAt: LocalDateTime?,
         since: LocalDateTime?,
+        sun: SunClock,
     ): Boolean = when (val t = a.trigger) {
-        is Trigger.TimeOfDay -> timeFires(t.latestTime(now), now, ranAt, since)
+        is Trigger.TimeOfDay, is Trigger.Sun -> timeFires(t.latestTime(now, sun), now, ranAt, since)
         is Trigger.StateMatches -> {
             val current = states[t.device]?.takeIf { it.online }?.values?.get(t.key)
             val previous = previousStates[t.device]?.values?.get(t.key)

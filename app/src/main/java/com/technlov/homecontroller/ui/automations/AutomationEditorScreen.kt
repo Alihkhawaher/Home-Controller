@@ -29,12 +29,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.LocationOff
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
@@ -84,8 +86,13 @@ import androidx.compose.ui.window.DialogProperties
 import com.technlov.home.core.Action
 import com.technlov.home.core.Capability
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunClock
+import com.technlov.home.core.SunEvent
+import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
+import com.technlov.home.core.nextTime
 import com.technlov.homecontroller.R
+import com.technlov.homecontroller.data.sunClock
 import com.technlov.homecontroller.ui.appViewModel
 import com.technlov.homecontroller.ui.capabilityIcon
 import com.technlov.homecontroller.ui.components.ConfirmDialog
@@ -97,7 +104,9 @@ import com.technlov.homecontroller.ui.components.SectionHeader
 import com.technlov.homecontroller.ui.device.snapToStep
 import com.technlov.homecontroller.ui.formatNumber
 import com.technlov.homecontroller.ui.rememberNotificationAccess
+import com.technlov.homecontroller.ui.settings.HomeLocationDialog
 import com.technlov.homecontroller.ui.unitSuffix
+import java.time.LocalDateTime
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -110,9 +119,12 @@ fun AutomationEditorScreen(automationId: String?, onDone: () -> Unit, prefillDev
     }
     val draftOrNull by vm.draft.collectAsState()
     val devices by vm.devices.collectAsState()
+    val homeLocation by vm.homeLocation.collectAsState()
+    val sun = remember(homeLocation) { homeLocation.sunClock() }
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(vm.messages, snackbar)
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var pickLocation by rememberSaveable { mutableStateOf(false) }
     val notifications = rememberNotificationAccess()
 
     val draft = draftOrNull
@@ -167,7 +179,9 @@ fun AutomationEditorScreen(automationId: String?, onDone: () -> Unit, prefillDev
             item(key = "when") {
                 Column {
                     SectionHeader(stringResource(R.string.automation_when))
-                    GroupCard(contentPadding = PaddingValues(16.dp)) { TriggerEditor(draft, devices, update) }
+                    GroupCard(contentPadding = PaddingValues(16.dp)) {
+                        TriggerEditor(draft, devices, sun, hasLocation = homeLocation != null, onSetLocation = { pickLocation = true }, update)
+                    }
                 }
             }
             item(key = "then") { SectionHeader(stringResource(R.string.automation_then)) }
@@ -277,11 +291,23 @@ fun AutomationEditorScreen(automationId: String?, onDone: () -> Unit, prefillDev
             onDismiss = { confirmDelete = false },
         )
     }
+
+    if (pickLocation) {
+        HomeLocationDialog(
+            current = homeLocation,
+            onSave = { location ->
+                vm.setHomeLocation(location)
+                pickLocation = false
+            },
+            onDismiss = { pickLocation = false },
+        )
+    }
 }
 
 @Composable
 private fun autoName(draft: AutomationDraft, devices: List<DeviceOption>): String = when (draft.kind) {
     TriggerKind.TIME -> stringResource(R.string.automation_auto_name_time, formatTime(draft.hour, draft.minute))
+    TriggerKind.SUN -> sunOffsetText(draft.sunEvent, draft.offsetMinutes)
     TriggerKind.DEVICE -> stringResource(
         R.string.automation_auto_name_state,
         devices.firstOrNull { it.key == draft.device }?.name ?: stringResource(R.string.automation_a_device),
@@ -314,16 +340,24 @@ private fun problemText(problem: DraftProblem): String = stringResource(
 // ---- trigger ----
 
 @Composable
-private fun TriggerEditor(draft: AutomationDraft, devices: List<DeviceOption>, update: DraftUpdate) {
+private fun TriggerEditor(
+    draft: AutomationDraft,
+    devices: List<DeviceOption>,
+    sun: SunClock,
+    hasLocation: Boolean,
+    onSetLocation: () -> Unit,
+    update: DraftUpdate,
+) {
+    val timed = draft.kind != TriggerKind.DEVICE
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         SegmentedButton(
-            selected = draft.kind == TriggerKind.TIME,
-            onClick = { update { it.copy(kind = TriggerKind.TIME) } },
+            selected = timed,
+            onClick = { if (!timed) update { it.copy(kind = TriggerKind.TIME) } },
             shape = SegmentedButtonDefaults.itemShape(0, 2),
             icon = { Icon(Icons.Rounded.Schedule, contentDescription = null, modifier = Modifier.size(18.dp)) },
         ) { Text(stringResource(R.string.trigger_time)) }
         SegmentedButton(
-            selected = draft.kind == TriggerKind.DEVICE,
+            selected = !timed,
             onClick = { update { it.copy(kind = TriggerKind.DEVICE) } },
             shape = SegmentedButtonDefaults.itemShape(1, 2),
             icon = { Icon(Icons.Rounded.Sensors, contentDescription = null, modifier = Modifier.size(18.dp)) },
@@ -331,34 +365,60 @@ private fun TriggerEditor(draft: AutomationDraft, devices: List<DeviceOption>, u
     }
     Spacer(Modifier.height(16.dp))
     AnimatedContent(
-        targetState = draft.kind,
+        targetState = timed,
         transitionSpec = { fadeIn() togetherWith fadeOut() },
         label = "triggerKind",
-    ) { kind ->
+    ) { isTimed ->
         Column {
-            when (kind) {
-                TriggerKind.TIME -> TimeTriggerEditor(draft, update)
-                TriggerKind.DEVICE -> StateTriggerEditor(draft, devices, update)
-            }
+            if (isTimed) TimeTriggerEditor(draft, sun, hasLocation, onSetLocation, update)
+            else StateTriggerEditor(draft, devices, update)
         }
     }
 }
 
+/** A clock time, or sunrise / sunset with an offset; then the days. */
 @Composable
-private fun TimeTriggerEditor(draft: AutomationDraft, update: DraftUpdate) {
+private fun TimeTriggerEditor(
+    draft: AutomationDraft,
+    sun: SunClock,
+    hasLocation: Boolean,
+    onSetLocation: () -> Unit,
+    update: DraftUpdate,
+) {
     val scheme = MaterialTheme.colorScheme
     var picking by rememberSaveable { mutableStateOf(false) }
-    Surface(
-        onClick = { picking = true },
-        shape = MaterialTheme.shapes.medium,
-        color = scheme.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Schedule, contentDescription = null, tint = scheme.primary)
-            Spacer(Modifier.width(16.dp))
-            Text(formatTime(draft.hour, draft.minute), style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
-            Text(stringResource(R.string.action_change), style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = draft.kind == TriggerKind.TIME,
+            onClick = { update { it.copy(kind = TriggerKind.TIME) } },
+            label = { Text(stringResource(R.string.trigger_at_time)) },
+            leadingIcon = { Icon(Icons.Rounded.Schedule, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        )
+        listOf(SunEvent.SUNRISE to R.string.sun_sunrise, SunEvent.SUNSET to R.string.sun_sunset).forEach { (event, label) ->
+            FilterChip(
+                selected = draft.kind == TriggerKind.SUN && draft.sunEvent == event,
+                onClick = { update { it.copy(kind = TriggerKind.SUN, sunEvent = event) } },
+                label = { Text(stringResource(label)) },
+                leadingIcon = { Icon(Icons.Rounded.WbTwilight, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    if (draft.kind == TriggerKind.SUN) {
+        SunTimeEditor(draft, sun, hasLocation, onSetLocation, update)
+    } else {
+        Surface(
+            onClick = { picking = true },
+            shape = MaterialTheme.shapes.medium,
+            color = scheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Schedule, contentDescription = null, tint = scheme.primary)
+                Spacer(Modifier.width(16.dp))
+                Text(formatTime(draft.hour, draft.minute), style = MaterialTheme.typography.displaySmall, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.action_change), style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+            }
         }
     }
     Spacer(Modifier.height(16.dp))
@@ -407,6 +467,57 @@ private fun TimeTriggerEditor(draft: AutomationDraft, update: DraftUpdate) {
                 picking = false
             },
             onDismiss = { picking = false },
+        )
+    }
+}
+
+/** "15 min before sunset" with earlier / later buttons, then when that is next -- or why it can't run yet. */
+@Composable
+private fun SunTimeEditor(
+    draft: AutomationDraft,
+    sun: SunClock,
+    hasLocation: Boolean,
+    onSetLocation: () -> Unit,
+    update: DraftUpdate,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val max = Trigger.Sun.MAX_OFFSET_MINUTES
+    Surface(shape = MaterialTheme.shapes.medium, color = scheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.WbTwilight, contentDescription = null, tint = scheme.primary)
+            Spacer(Modifier.width(16.dp))
+            Text(
+                sunOffsetText(draft.sunEvent, draft.offsetMinutes),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = { update { it.withOffsetBy(-SUN_OFFSET_STEP) } },
+                enabled = draft.offsetMinutes > -max,
+            ) { Icon(Icons.Rounded.Remove, contentDescription = stringResource(R.string.action_earlier)) }
+            IconButton(
+                onClick = { update { it.withOffsetBy(SUN_OFFSET_STEP) } },
+                enabled = draft.offsetMinutes < max,
+            ) { Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.action_later)) }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    if (!hasLocation) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(Icons.Rounded.LocationOff, contentDescription = null, tint = scheme.error, modifier = Modifier.padding(top = 2.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.sun_needs_location), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                TextButton(onClick = onSetLocation) { Text(stringResource(R.string.sun_set_location)) }
+            }
+        }
+    } else {
+        val next = draft.timedTrigger()?.nextTime(LocalDateTime.now(), sun)
+        Text(
+            if (next != null) stringResource(R.string.sun_next, whenText(next)) else stringResource(R.string.sun_next_none),
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
         )
     }
 }

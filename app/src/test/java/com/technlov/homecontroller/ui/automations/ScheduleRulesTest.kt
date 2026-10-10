@@ -7,6 +7,8 @@ import com.technlov.home.core.Condition
 import com.technlov.home.core.Keys
 import com.technlov.home.core.Op
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunClock
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import org.junit.Assert.assertEquals
@@ -14,6 +16,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
+import java.time.LocalDate
 
 class ScheduleRulesTest {
     private val plug = "tuya:plug1"
@@ -25,6 +28,35 @@ class ScheduleRulesTest {
     fun aTimeOfDaySetOnTheDeviceIsItsSchedule() {
         assertTrue(at(on).isScheduleFor(plug))
         assertFalse("another device's", at(on).isScheduleFor("gree:ac1"))
+    }
+
+    @Test
+    fun aSunriseOrSunsetSetOnTheDeviceIsItsScheduleToo() {
+        val atSunset = Automation("s", "n", trigger = Trigger.Sun(SunEvent.SUNSET, -15, setOf(DayOfWeek.FRIDAY)), actions = listOf(on))
+        assertTrue(atSunset.isScheduleFor(plug))
+        assertFalse(atSunset.isScheduleFor("gree:ac1"))
+        assertFalse(atSunset.copy(conditions = listOf(Condition.TimeBetween(6, 0, 8, 0))).isScheduleFor(plug))
+        assertFalse(atSunset.copy(actions = listOf(on, Action.Notify("t", "x"))).isScheduleFor(plug))
+        assertTrue("run once is still a schedule", atSunset.copy(runOnce = true).isScheduleFor(plug))
+    }
+
+    @Test
+    fun schedulesSortByWhenTheyFallToday() {
+        val today = LocalDate.of(2026, 10, 12)
+        val sun = SunClock { event, date -> if (event == SunEvent.SUNRISE) date.atTime(5, 50) else date.atTime(17, 42) }
+        val triggers = listOf(
+            Trigger.TimeOfDay(18, 0),
+            Trigger.Sun(SunEvent.SUNSET, -15), // 17:27
+            Trigger.TimeOfDay(7, 0),
+            Trigger.Sun(SunEvent.SUNRISE, 30), // 06:20
+        )
+        assertEquals(
+            listOf(Trigger.Sun(SunEvent.SUNRISE, 30), Trigger.TimeOfDay(7, 0), Trigger.Sun(SunEvent.SUNSET, -15), Trigger.TimeOfDay(18, 0)),
+            triggers.sortedBy { it.minuteOfDay(today, sun) },
+        )
+        // Without a location, sunrise counts as 06:00 and sunset as 18:00.
+        assertEquals(17 * 60 + 45, Trigger.Sun(SunEvent.SUNSET, -15).minuteOfDay(today, SunClock.UNKNOWN))
+        assertEquals(6 * 60, Trigger.Sun(SunEvent.SUNRISE).minuteOfDay(today, SunClock.UNKNOWN))
     }
 
     @Test
