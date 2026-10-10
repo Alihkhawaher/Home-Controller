@@ -82,6 +82,7 @@ class HomeJsonTest {
             dynamicColor = false,
             verboseLogging = true,
             homeLocation = HomeLocation(51.48, -0.01),
+            weekend = Weekend.FRI,
         ),
         lastRuns =mapOf("a1" to LocalDateTime.of(2026, 10, 12, 6, 45), "a2" to LocalDateTime.of(2026, 10, 11, 14, 3, 27)),
     )
@@ -132,6 +133,14 @@ class HomeJsonTest {
         val data = HomeJson.decode(odd)
         assertEquals(Trigger.Sun(SunEvent.SUNSET, Trigger.Sun.MAX_OFFSET_MINUTES), data.automations.single().trigger)
         assertNull("a place off the map is dropped", data.settings.homeLocation)
+    }
+
+    @Test
+    fun theWeekendIsSavedOnlyOnceChosen() {
+        assertNull("not chosen: the phone's region decides", HomeJson.decode("""{"settings":{}}""").settings.weekend)
+        assertNull("unknown name: back to the region's", HomeJson.decode("""{"settings":{"weekend":"THU_FRI"}}""").settings.weekend)
+        assertEquals(Weekend.FRI_SAT, HomeJson.decode("""{"settings":{"weekend":"FRI_SAT"}}""").settings.weekend)
+        assertTrue(HomeJson.encode(full).contains(""""weekend":"FRI""""))
     }
 
     @Test

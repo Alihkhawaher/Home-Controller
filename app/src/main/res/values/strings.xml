@@ -183,6 +183,8 @@
     <string name="trigger_device">Device</string>
     <string name="trigger_repeat">Repeat</string>
     <string name="days_every_day">Every day</string>
+    <string name="days_workdays">Workdays</string>
+    <string name="days_weekend">Weekend</string>
     <string name="time_picker_title">Select time</string>
     <string name="automation_device_label">Device</string>
     <string name="automation_value_label">Value</string>
@@ -503,4 +505,12 @@
     <string name="location_placeholder" translatable="false">51.48, -0.01</string>
     <string name="location_field_hint">As a maps app shows it, for example 51.48, -0.01</string>
     <string name="location_invalid">Type it like 51.48, -0.01</string>
+
+    <!-- Weekend (for the Workdays / Weekend shortcuts in schedules) -->
+    <string name="settings_weekend">Weekend</string>
+    <!-- Two day names, e.g. "Friday and Saturday". -->
+    <string name="weekend_two_days">%1$s and %2$s</string>
+    <string name="weekend_from_region">usual in your region</string>
+    <string name="weekend_region_default">Usual in your region</string>
+    <string name="weekend_dialog_text">Used for the Workdays and Weekend shortcuts when you pick a schedule’s days.</string>
 </resources>

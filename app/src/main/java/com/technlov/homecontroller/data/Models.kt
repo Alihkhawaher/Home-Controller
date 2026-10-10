@@ -46,6 +46,8 @@ data class AppSettings(
     val verboseLogging: Boolean = false,
     /** Where the home is, for sunrise and sunset schedules; null until the user sets it (they don't run till then). */
     val homeLocation: HomeLocation? = null,
+    /** The user's weekend; null until they pick one: then the phone's region decides ([Weekend.forRegion]). */
+    val weekend: Weekend? = null,
 ) {
     companion object {
         const val DEFAULT_FOREGROUND_POLL = 10

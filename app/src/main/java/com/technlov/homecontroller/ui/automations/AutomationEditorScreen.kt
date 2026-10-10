@@ -92,7 +92,9 @@ import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import com.technlov.home.core.nextTime
 import com.technlov.homecontroller.R
+import com.technlov.homecontroller.data.DayPreset
 import com.technlov.homecontroller.data.sunClock
+import com.technlov.homecontroller.ui.LocalWeekend
 import com.technlov.homecontroller.ui.appViewModel
 import com.technlov.homecontroller.ui.capabilityIcon
 import com.technlov.homecontroller.ui.components.ConfirmDialog
@@ -446,16 +448,21 @@ private fun TimeTriggerEditor(
             }
         }
     }
-    Spacer(Modifier.height(8.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            daysText(draft.days),
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        if (draft.days.isNotEmpty()) {
-            TextButton(onClick = { update { it.copy(days = emptySet()) } }) { Text(stringResource(R.string.days_every_day)) }
+    Spacer(Modifier.height(12.dp))
+    // Quick picks; which days are the weekend follows Settings (or the phone's region).
+    val weekend = LocalWeekend.current
+    val preset = DayPreset.of(draft.days, weekend)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(
+            DayPreset.EVERY_DAY to R.string.days_every_day,
+            DayPreset.WORKDAYS to R.string.days_workdays,
+            DayPreset.WEEKEND to R.string.days_weekend,
+        ).forEach { (pick, label) ->
+            FilterChip(
+                selected = preset == pick,
+                onClick = { update { it.copy(days = pick.days(weekend)) } },
+                label = { Text(stringResource(label)) },
+            )
         }
     }
     if (picking) {

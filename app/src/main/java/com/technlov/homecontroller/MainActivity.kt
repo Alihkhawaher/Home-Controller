@@ -7,12 +7,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.technlov.homecontroller.data.Weekend
 import com.technlov.homecontroller.hub.HubService
 import com.technlov.homecontroller.ui.HomeControllerApp
+import com.technlov.homecontroller.ui.LocalWeekend
+import com.technlov.homecontroller.ui.phoneRegion
 import com.technlov.homecontroller.ui.theme.HomeTheme
 import com.technlov.homecontroller.ui.theme.isDark
 
@@ -30,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by container.settings.collectAsState()
+            val regionWeekend = remember { Weekend.forRegion(phoneRegion(this)) }
             val dark = settings.theme.isDark()
             DisposableEffect(dark) {
                 enableEdgeToEdge(
@@ -39,7 +45,9 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
             HomeTheme(dark = dark, dynamicColor = settings.dynamicColor) {
-                HomeControllerApp()
+                CompositionLocalProvider(LocalWeekend provides (settings.weekend ?: regionWeekend)) {
+                    HomeControllerApp()
+                }
             }
         }
     }

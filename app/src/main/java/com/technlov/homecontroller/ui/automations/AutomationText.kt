@@ -9,6 +9,8 @@ import com.technlov.home.core.Op
 import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.homecontroller.R
+import com.technlov.homecontroller.data.DayPreset
+import com.technlov.homecontroller.ui.LocalWeekend
 import com.technlov.homecontroller.ui.valueText
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -41,10 +43,13 @@ fun lastRunText(lastRun: LocalDateTime): String {
     return stringResource(R.string.automation_last_ran_on, day, time)
 }
 
+/** "Every day", "Workdays", "Weekend" (by the user's [LocalWeekend]), or the days: "Mon, Wed". */
 @Composable
-fun daysText(days: Set<DayOfWeek>): String = when {
-    days.isEmpty() || days.size == 7 -> stringResource(R.string.days_every_day)
-    else -> localWeek().filter { it in days }.joinToString(", ") { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
+fun daysText(days: Set<DayOfWeek>): String = when (DayPreset.of(days, LocalWeekend.current)) {
+    DayPreset.EVERY_DAY -> stringResource(R.string.days_every_day)
+    DayPreset.WORKDAYS -> stringResource(R.string.days_workdays)
+    DayPreset.WEEKEND -> stringResource(R.string.days_weekend)
+    null -> localWeek().filter { it in days }.joinToString(", ") { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
 }
 
 /** "15 min", "1 h", "1 h 30 min". */

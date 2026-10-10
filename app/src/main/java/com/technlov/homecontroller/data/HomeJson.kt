@@ -79,6 +79,8 @@ internal data class SettingsDto(
     val dynamicColor: Boolean = true,
     val verboseLogging: Boolean = false,
     val homeLocation: LocationDto? = null,
+    /** A [Weekend] name; null (or an unknown name) follows the phone's region. */
+    val weekend: String? = null,
 )
 
 @Serializable
@@ -196,6 +198,7 @@ internal fun HomeData.toDto() = HomeDataDto(
         dynamicColor = settings.dynamicColor,
         verboseLogging = settings.verboseLogging,
         homeLocation = settings.homeLocation?.let { LocationDto(it.latitude, it.longitude) },
+        weekend = settings.weekend?.name,
     ),
     lastRuns = lastRuns.mapValues { it.value.toString() },
 )
@@ -213,6 +216,7 @@ internal fun HomeDataDto.toModel() = HomeData(
         verboseLogging = settings.verboseLogging,
         // A place off the map is dropped: sun schedules then ask for the location again.
         homeLocation = settings.homeLocation?.let { HomeLocation.of(it.latitude, it.longitude) },
+        weekend = settings.weekend?.let { name -> Weekend.entries.firstOrNull { it.name == name } },
     ),
     // An unreadable time is dropped: at worst that automation is not caught up once.
     lastRuns = lastRuns.mapNotNull { (id, at) ->
