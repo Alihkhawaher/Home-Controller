@@ -260,6 +260,21 @@ Choosing capabilities:
 - Declare only what the device really supports. If models differ, ask the device on the first read and declare what
   it answered (the Gree session does this).
 
+### Optional: pushes
+
+If the device reports changes on its own over a connection you keep open, override `updates()` and return a hot
+flow of whole states (a `MutableSharedFlow` the session emits into). The hub then shows each push at once and checks
+the state-triggered automations straight away; it keeps polling `read()` as the fallback. The rules:
+
+- the session owns the connection and the flow: `close()` stops both, and collecting the flow opens nothing;
+- emit only what the device sent, never an "offline" state (polling finds an unreachable device);
+- never let a slow collector block the code that reads the socket (`tryEmit` with a buffer that drops the oldest);
+- give states from `read`, `apply` and `updates` non-decreasing `updatedAtMillis`, so a push that crossed a poll is
+  not mistaken for a newer state.
+
+The plug in this guide is polled, so it keeps the default (`null`). The Tuya session is a complete example of a
+pushing one.
+
 ## 5. Talk to the network through a transport
 
 Put the socket code behind a small interface. The connector uses the real one; tests use a fake device.

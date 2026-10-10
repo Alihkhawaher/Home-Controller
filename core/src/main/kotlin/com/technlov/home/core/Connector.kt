@@ -1,5 +1,7 @@
 package com.technlov.home.core
 
+import kotlinx.coroutines.flow.Flow
+
 /**
  * The plugin contract of Home Controller.
  *
@@ -71,6 +73,18 @@ interface DeviceSession : AutoCloseable {
 
     /** Change one or more values in one go; returns the state afterwards. */
     suspend fun apply(changes: List<SetValue>): DeviceState
+
+    /**
+     * Optional push channel: the states a device reports on its own over a connection the session keeps open (a
+     * switch flipped by hand, an alarm going off, a fresh meter reading), each as a whole state. Null -- the default
+     * -- for a device that can only be polled.
+     *
+     * The flow is hot and belongs to the session: collecting it opens nothing, and it goes quiet after [close]. It
+     * carries only what the device sent, never an "offline" state: the hub keeps polling [read] as the fallback and
+     * finds an unreachable device that way. States from one session (from [read], [apply] and here) must carry
+     * non-decreasing [DeviceState.updatedAtMillis], so a push that crossed a poll can be told from a newer one.
+     */
+    fun updates(): Flow<DeviceState>? = null
 
     override fun close() {}
 }
