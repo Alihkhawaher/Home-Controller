@@ -4,6 +4,7 @@ import com.technlov.home.core.Action
 import com.technlov.home.core.Automation
 import com.technlov.home.core.AutomationEngine
 import com.technlov.home.core.ConnectorRegistry
+import com.technlov.home.core.DefaultAutomationEngine
 import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceState
 import com.technlov.home.core.EventLog
@@ -55,6 +56,7 @@ class HubTest {
     }
     private var due: List<Automation> = emptyList()
     private var seenPrevious: Map<DeviceKey, DeviceState>? = null
+    private var seenPreviousCheck: LocalDateTime? = null
     private val engine = object : AutomationEngine {
         override fun due(
             now: LocalDateTime,
@@ -62,8 +64,10 @@ class HubTest {
             states: Map<DeviceKey, DeviceState>,
             previousStates: Map<DeviceKey, DeviceState>,
             lastRun: Map<String, LocalDateTime>,
+            previousCheck: LocalDateTime?,
         ): List<Automation> {
             seenPrevious = previousStates
+            seenPreviousCheck = previousCheck
             return due
         }
     }
@@ -206,12 +210,69 @@ class HubTest {
         assertEquals(true, hub.live.value.getValue(ac).state!!.bool(Keys.POWER))
         assertEquals(listOf("Cooling" to "Bedroom AC is on"), notifications)
         assertEquals(listOf(Triple("Cool down", "Old TV", DeviceIssue.NoConnector("missing"))), failures)
-        assertEquals(now, hub.lastRuns.value["a1"])
+        assertEquals("the run is saved", now, store.value.lastRuns["a1"])
         assertEquals(emptyMap<DeviceKey, DeviceState>(), seenPrevious)
+        assertNull("nothing checked before the first tick", seenPreviousCheck)
 
         due = emptyList()
         hub.tick(now.plusMinutes(1))
         assertTrue("previous states are handed to the engine", seenPrevious!!.containsKey(ac))
+        assertEquals("so is the previous check", now, seenPreviousCheck)
+    }
+
+    // ---- catch-up: the real engine, with runs saved in the repository ----
+
+    private val morning = Automation("m", "Morning", trigger = Trigger.TimeOfDay(7, 30), actions = listOf(Action.Notify("Morning", "x")))
+
+    private fun hubWithEngine() =
+        Hub(ConnectorRegistry(listOf(connector)), repository, DefaultAutomationEngine(), events, ioContext = EmptyCoroutineContext)
+
+    private fun at(h: Int, m: Int, day: Int = 12) = LocalDateTime.of(2026, 10, day, h, m)
+
+    @Test
+    fun aTimeMissedByThreeMinutesRunsOnceWhenTheHubWakes() = runTest {
+        repository.saveAutomation(morning)
+        val hub = hubWithEngine()
+        hub.tick(at(7, 29))
+        hub.tick(at(7, 33)) // Android dozed through 07:30
+        hub.tick(at(7, 34))
+        hub.tick(at(7, 35))
+        assertEquals(listOf("Morning" to "x"), notifications)
+        assertEquals(at(7, 33), store.value.lastRuns["m"])
+    }
+
+    @Test
+    fun aTimeMissedByThirtyMinutesIsSkipped() = runTest {
+        repository.saveAutomation(morning)
+        val hub = hubWithEngine()
+        hub.tick(at(7, 29))
+        hub.tick(at(8, 0))
+        hub.tick(at(8, 1))
+        assertTrue(notifications.isEmpty())
+        assertNull(store.value.lastRuns["m"])
+    }
+
+    @Test
+    fun aRestartAfterTheRunDoesNotRepeatIt() = runTest {
+        repository.saveAutomation(morning)
+        hubWithEngine().tick(at(7, 30))
+        // The app restarts: a new hub, nothing in memory, the saved run in the repository.
+        val restarted = hubWithEngine()
+        restarted.tick(at(7, 32))
+        restarted.tick(at(7, 33))
+        assertEquals(1, notifications.size)
+    }
+
+    @Test
+    fun aRestartThatMissedTheTimeCatchesItUp() = runTest {
+        repository.saveAutomation(morning)
+        hubWithEngine().tick(at(7, 30, day = 11)) // yesterday
+        // Today the app was ended at 07:28 and is back at 07:33.
+        val restarted = hubWithEngine()
+        restarted.tick(at(7, 33))
+        restarted.tick(at(7, 34))
+        assertEquals(2, notifications.size)
+        assertEquals(at(7, 33), store.value.lastRuns["m"])
     }
 
     // ---- run once ----

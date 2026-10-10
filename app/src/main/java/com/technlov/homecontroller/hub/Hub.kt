@@ -12,9 +12,10 @@ import com.technlov.home.core.DeviceState
 import com.technlov.home.core.EventLog
 import com.technlov.home.core.SetValue
 import com.technlov.home.core.info
+import com.technlov.home.core.key
+import com.technlov.home.core.latestTime
 import com.technlov.home.core.trace
 import com.technlov.home.core.warn
-import com.technlov.home.core.key
 import com.technlov.homecontroller.data.HomeData
 import com.technlov.homecontroller.data.HomeRepository
 import com.technlov.homecontroller.data.SecretBox
@@ -33,14 +34,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Duration
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 
@@ -119,9 +121,12 @@ class Hub(
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running.asStateFlow()
 
-    private val _lastRuns = MutableStateFlow<Map<String, LocalDateTime>>(emptyMap())
-    /** When each automation last ran (since the hub started). */
-    val lastRuns: StateFlow<Map<String, LocalDateTime>> = _lastRuns.asStateFlow()
+    /**
+     * When [tick] last checked the automations; null until the first check after the app started. A time that passed
+     * after it was missed (Android dozed) and may be caught up; one at or before it was seen. When each automation
+     * last ran is saved in the repository ([HomeData.lastRuns]), so it outlives a restart.
+     */
+    private var lastCheck: LocalDateTime? = null
 
     /** True while the app is on screen: devices are polled more often. */
     val appVisible = MutableStateFlow(false)
@@ -223,12 +228,29 @@ class Hub(
     suspend fun tick(now: LocalDateTime) {
         val data = repository.current()
         val states = currentStates()
-        val due = engine.due(now, data.automations.filter { it.enabled }, states, previousStates, _lastRuns.value)
+        val due = engine.due(now, data.automations.filter { it.enabled }, states, previousStates, data.lastRuns, lastCheck)
         previousStates = states
+        lastCheck = now
         for (automation in due) {
-            _lastRuns.update { it + (automation.id to now) }
+            // Saved before the actions run: whatever happens next (a crash, Android ending the app), a restart does
+            // not run it again.
+            recordRun(automation, now)
+            automation.trigger.latestTime(now)?.takeIf { it.isBefore(now.truncatedTo(ChronoUnit.MINUTES)) }?.let { missed ->
+                log.info(LogSource.HUB, "Automation \"${automation.name}\": its ${missed.toLocalTime()} was missed; running it ${Duration.between(missed, now).toMinutes()} min late")
+            }
             val done = execute(automation, data)
             if (automation.runOnce) finishRunOnce(automation, done)
+        }
+    }
+
+    private suspend fun recordRun(automation: Automation, now: LocalDateTime) {
+        try {
+            repository.recordRun(automation.id, now)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // It still runs; the hub's own last check keeps it from running twice until the app restarts.
+            log.warn(LogSource.HUB, "Automation \"${automation.name}\": could not save when it ran", e)
         }
     }
 

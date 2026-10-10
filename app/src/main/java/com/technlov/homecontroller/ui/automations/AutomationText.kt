@@ -10,6 +10,8 @@ import com.technlov.home.core.Trigger
 import com.technlov.homecontroller.R
 import com.technlov.homecontroller.ui.valueText
 import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -26,6 +28,16 @@ fun localWeek(): List<DayOfWeek> {
 fun formatTime(hour: Int, minute: Int): String {
     val pattern = if (DateFormat.is24HourFormat(LocalContext.current)) "HH:mm" else "h:mm a"
     return LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)).format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
+}
+
+/** "Last ran at 07:30" today; "Last ran Fri 9 Oct at 07:30" on an earlier day (runs are kept across restarts). */
+@Composable
+fun lastRunText(lastRun: LocalDateTime): String {
+    val time = formatTime(lastRun.hour, lastRun.minute)
+    if (lastRun.toLocalDate() == LocalDate.now()) return stringResource(R.string.automation_last_ran, time)
+    val locale = Locale.getDefault()
+    val day = lastRun.format(DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "EEEdMMM"), locale))
+    return stringResource(R.string.automation_last_ran_on, day, time)
 }
 
 @Composable

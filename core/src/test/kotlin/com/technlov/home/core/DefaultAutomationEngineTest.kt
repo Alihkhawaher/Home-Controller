@@ -33,7 +33,8 @@ class DefaultAutomationEngineTest {
         states: Map<DeviceKey, DeviceState> = emptyMap(),
         previous: Map<DeviceKey, DeviceState> = emptyMap(),
         lastRun: Map<String, LocalDateTime> = emptyMap(),
-    ) = engine.due(now, a, states, previous, lastRun).map { it.id }
+        since: LocalDateTime? = null,
+    ) = engine.due(now, a, states, previous, lastRun, since).map { it.id }
 
     // ---- time of day ----
 
@@ -72,6 +73,72 @@ class DefaultAutomationEngineTest {
     fun emptyDaysMeansEveryDay() {
         val a = listOf(auto(Trigger.TimeOfDay(6, 0)))
         for (day in 12..18) assertEquals("day $day", listOf("a1"), due(a, at(6, 0, day = day)))
+    }
+
+    // ---- catch-up: a time the hub missed (Android dozed, or the app restarted) ----
+
+    @Test
+    fun aTimeMissedByThreeMinutesRunsOnce() {
+        val a = listOf(auto(Trigger.TimeOfDay(7, 30)))
+        // The hub checked at 07:29, the phone dozed through 07:30, and the next check is at 07:33.
+        assertEquals(listOf("a1"), due(a, at(7, 33), since = at(7, 29)))
+        // It ran at 07:33: the next minutes do not run it again.
+        val ran = mapOf("a1" to at(7, 33))
+        assertEquals(emptyList<String>(), due(a, at(7, 34), lastRun = ran, since = at(7, 33)))
+        assertEquals(emptyList<String>(), due(a, at(7, 35), lastRun = ran, since = at(7, 29)))
+    }
+
+    @Test
+    fun aTimeMissedByThirtyMinutesIsSkipped() {
+        val a = listOf(auto(Trigger.TimeOfDay(7, 30)))
+        assertEquals(emptyList<String>(), due(a, at(8, 0), since = at(7, 29)))
+        // The window is ten minutes after the time.
+        assertEquals(listOf("a1"), due(a, at(7, 40), since = at(7, 29)))
+        assertEquals(emptyList<String>(), due(a, at(7, 41), since = at(7, 29)))
+        assertEquals(10L, DefaultAutomationEngine.CATCH_UP.toMinutes())
+    }
+
+    @Test
+    fun aRestartAfterTheRunDoesNotRepeatIt() {
+        val a = listOf(auto(Trigger.TimeOfDay(7, 30)))
+        // Ran at 07:30; the app restarted (nothing checked since the start) at 07:32: the saved run says it ran.
+        assertEquals(emptyList<String>(), due(a, at(7, 32), lastRun = mapOf("a1" to at(7, 30))))
+        assertEquals(emptyList<String>(), due(a, at(7, 33), lastRun = mapOf("a1" to at(7, 30)), since = at(7, 32)))
+        // Restarted at 07:33 having last run yesterday: today's 07:30 was missed, so it runs now.
+        assertEquals(listOf("a1"), due(a, at(7, 33), lastRun = mapOf("a1" to at(7, 30, day = 11))))
+    }
+
+    @Test
+    fun rightAfterAStartWithoutASavedRunOnlyOnTimeCounts() {
+        // No saved run (an app updated from a version that did not keep them): 07:30 may have run already.
+        val a = listOf(auto(Trigger.TimeOfDay(7, 30)))
+        assertEquals(emptyList<String>(), due(a, at(7, 33)))
+        assertEquals(listOf("a1"), due(a, at(7, 30)))
+    }
+
+    @Test
+    fun aTimeCheckedOnTimeIsNotRetriedLater() {
+        // At 07:30 the AC was on, so the automation did not run. That was not a miss: 07:31 does not retry it.
+        val a = listOf(auto(Trigger.TimeOfDay(7, 30), listOf(Condition.StateCompare(ac, Keys.POWER, Op.EQ, Value.Bool(false)))))
+        val off = mapOf(ac to state(Keys.POWER to Value.Bool(false)))
+        assertEquals(emptyList<String>(), due(a, at(7, 31), off, since = at(7, 30)))
+        assertEquals(listOf("a1"), due(a, at(7, 31), off, since = at(7, 29)))
+    }
+
+    @Test
+    fun aMissedTimeIsCaughtUpAcrossMidnight() {
+        // 2026-10-16 is a Friday. 23:55 on Friday, the hub back at 00:03 on Saturday.
+        val friday = listOf(auto(Trigger.TimeOfDay(23, 55, setOf(DayOfWeek.FRIDAY))))
+        assertEquals(listOf("a1"), due(friday, at(0, 3, day = 17), since = at(23, 50, day = 16)))
+        val saturday = listOf(auto(Trigger.TimeOfDay(23, 55, setOf(DayOfWeek.SATURDAY))))
+        assertEquals(emptyList<String>(), due(saturday, at(0, 3, day = 17), since = at(23, 50, day = 16)))
+    }
+
+    @Test
+    fun aClockSetBackDoesNotStopTimeTriggers() {
+        // The phone's clock was a day ahead and was corrected: the last check and the last run lie "in the future".
+        val a = listOf(auto(Trigger.TimeOfDay(7, 30)))
+        assertEquals(listOf("a1"), due(a, at(7, 30), lastRun = mapOf("a1" to at(7, 30, day = 13)), since = at(7, 45, day = 13)))
     }
 
     @Test

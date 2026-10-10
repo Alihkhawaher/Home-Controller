@@ -162,11 +162,7 @@ private fun AutomationCard(
                 }
                 if (lastRun != null) {
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        stringResource(R.string.automation_last_ran, formatTime(lastRun.hour, lastRun.minute)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = scheme.primary,
-                    )
+                    Text(lastRunText(lastRun), style = MaterialTheme.typography.labelSmall, color = scheme.primary)
                 }
             }
             Spacer(Modifier.width(8.dp))

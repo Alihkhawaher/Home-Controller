@@ -12,6 +12,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDateTime
 
 class HomeRepositoryTest {
     private val store = InMemoryDataStore(HomeData())
@@ -98,6 +99,26 @@ class HomeRepositoryTest {
         assertFalse(store.value.automations.single().enabled)
         repository.deleteAutomation("a1")
         assertTrue(store.value.automations.isEmpty())
+    }
+
+    @Test
+    fun runsAreSavedKeptThroughEditsAndForgottenWithTheAutomation() = runTest {
+        val a = Automation("a1", "Night", trigger = Trigger.TimeOfDay(22, 0), actions = listOf(Action.Notify("t", "x")))
+        val b = a.copy(id = "b1")
+        repository.saveAutomation(a)
+        repository.saveAutomation(b)
+        val ten = LocalDateTime.of(2026, 10, 12, 22, 0)
+        repository.recordRun("a1", ten.minusDays(1))
+        repository.recordRun("a1", ten)
+        repository.recordRun("b1", ten)
+        assertEquals(mapOf("a1" to ten, "b1" to ten), store.value.lastRuns)
+
+        repository.saveAutomation(a.copy(name = "Late night"))
+        repository.setAutomationEnabled("a1", false)
+        assertEquals(ten, store.value.lastRuns["a1"])
+
+        repository.deleteAutomation("a1")
+        assertEquals(mapOf("b1" to ten), store.value.lastRuns)
     }
 
     @Test

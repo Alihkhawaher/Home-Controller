@@ -17,6 +17,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
+import java.time.LocalDateTime
 
 class HomeJsonTest {
 
@@ -73,6 +74,7 @@ class HomeJsonTest {
             dynamicColor = false,
             verboseLogging = true,
         ),
+        lastRuns = mapOf("a1" to LocalDateTime.of(2026, 10, 12, 6, 45), "a2" to LocalDateTime.of(2026, 10, 11, 14, 3, 27)),
     )
 
     @Test
@@ -98,6 +100,14 @@ class HomeJsonTest {
         val automation = HomeJson.decode(old).automations.single()
         assertFalse(automation.runOnce)
         assertTrue(automation.enabled)
+    }
+
+    @Test
+    fun lastRunsAreSavedAsLocalTimesAndAnUnreadableOneIsDropped() {
+        assertTrue(HomeJson.encode(full).contains("\"lastRuns\":{\"a1\":\"2026-10-12T06:45\""))
+        val json = """{"lastRuns":{"a":"2026-10-12T07:30","b":"yesterday"}}"""
+        assertEquals(mapOf("a" to LocalDateTime.of(2026, 10, 12, 7, 30)), HomeJson.decode(json).lastRuns)
+        assertTrue("saved before runs were kept", HomeJson.decode("""{"automations":[]}""").lastRuns.isEmpty())
     }
 
     @Test

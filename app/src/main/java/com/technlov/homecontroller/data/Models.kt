@@ -5,6 +5,7 @@ import com.technlov.home.core.Capability
 import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.key
+import java.time.LocalDateTime
 
 /**
  * A device the user added: what the connector found ([ref]) plus what the user chose (name, room, visibility,
@@ -58,6 +59,11 @@ data class HomeData(
     val rooms: List<Room> = emptyList(),
     val automations: List<Automation> = emptyList(),
     val settings: AppSettings = AppSettings(),
+    /**
+     * When each automation last ran (phone-local time), by automation id. Saved, so a restart never runs a time
+     * twice and a time the hub missed can still be caught up.
+     */
+    val lastRuns: Map<String, LocalDateTime> = emptyMap(),
 ) {
     val sortedRooms: List<Room> get() = rooms.sortedWith(compareBy({ it.order }, { it.name }))
     val sortedDevices: List<SavedDevice> get() = devices.sortedWith(compareBy({ it.order }, { it.name }))

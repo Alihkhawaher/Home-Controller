@@ -210,6 +210,8 @@
     <string name="automation_auto_name_time">At %1$s</string>
     <string name="automation_auto_name_state">When %1$s changes</string>
     <string name="automation_last_ran">Last ran at %1$s</string>
+    <!-- %1$s: a short date such as "Fri 9 Oct"; %2$s: the time. -->
+    <string name="automation_last_ran_on">Last ran %1$s at %2$s</string>
     <string name="automation_failed_title">%1$s didn’t finish</string>
     <string name="automation_failed_text">Couldn’t change %1$s: %2$s</string>
     <string name="message_automation_running">Running “%1$s”…</string>

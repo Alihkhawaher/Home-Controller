@@ -14,6 +14,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.time.DayOfWeek
+import java.time.LocalDateTime
+import java.time.format.DateTimeParseException
 
 /**
  * The saved data as JSON. The stored shape is a set of DTOs, not the core classes, so the plugin contract can change
@@ -42,6 +44,8 @@ internal data class HomeDataDto(
     val rooms: List<RoomDto> = emptyList(),
     val automations: List<AutomationDto> = emptyList(),
     val settings: SettingsDto = SettingsDto(),
+    /** Automation id -> ISO local date-time of its last run ("2026-10-12T07:30"). */
+    val lastRuns: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -182,6 +186,7 @@ internal fun HomeData.toDto() = HomeDataDto(
         dynamicColor = settings.dynamicColor,
         verboseLogging = settings.verboseLogging,
     ),
+    lastRuns = lastRuns.mapValues { it.value.toString() },
 )
 
 internal fun HomeDataDto.toModel() = HomeData(
@@ -196,6 +201,14 @@ internal fun HomeDataDto.toModel() = HomeData(
         dynamicColor = settings.dynamicColor,
         verboseLogging = settings.verboseLogging,
     ),
+    // An unreadable time is dropped: at worst that automation is not caught up once.
+    lastRuns = lastRuns.mapNotNull { (id, at) ->
+        try {
+            id to LocalDateTime.parse(at)
+        } catch (e: DateTimeParseException) {
+            null
+        }
+    }.toMap(),
 )
 
 private fun SavedDevice.toDto() = DeviceDto(

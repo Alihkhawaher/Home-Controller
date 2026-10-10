@@ -29,12 +29,8 @@ data class AutomationsUi(
 )
 
 class AutomationsViewModel(private val container: AppContainer) : ViewModel() {
-    val ui: StateFlow<AutomationsUi> = combine(
-        container.repository.data,
-        container.hub.live,
-        container.hub.lastRuns,
-    ) { data, live, runs ->
-        AutomationsUi(true, data.automations, deviceOptions(data, live), runs)
+    val ui: StateFlow<AutomationsUi> = combine(container.repository.data, container.hub.live) { data, live ->
+        AutomationsUi(true, data.automations, deviceOptions(data, live), data.lastRuns)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AutomationsUi())
 
     fun setEnabled(id: String, enabled: Boolean) {
