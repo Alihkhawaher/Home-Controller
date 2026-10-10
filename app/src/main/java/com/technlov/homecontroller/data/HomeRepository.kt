@@ -8,11 +8,13 @@ import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.key
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
- * The user's devices, rooms, automations and settings, saved as one JSON document. Every change is one atomic
- * [DataStore.updateData], so the UI and the hub service always see a consistent picture.
+ * The user's devices, rooms, automations and settings (and when each automation last ran), saved as one JSON
+ * document. Every change is one atomic [DataStore.updateData], so the UI and the hub service always see a consistent
+ * picture.
  */
 class HomeRepository(private val store: DataStore<HomeData>) {
 
@@ -141,11 +143,16 @@ class HomeRepository(private val store: DataStore<HomeData>) {
     }
 
     suspend fun deleteAutomation(id: String) {
-        edit { d -> d.copy(automations = d.automations.filterNot { it.id == id }) }
+        edit { d -> d.copy(automations = d.automations.filterNot { it.id == id }, lastRuns = d.lastRuns - id) }
     }
 
     suspend fun setAutomationEnabled(id: String, enabled: Boolean) {
         edit { d -> d.copy(automations = d.automations.map { if (it.id == id) it.copy(enabled = enabled) else it }) }
+    }
+
+    /** Remembers that automation [id] ran at [at] (the hub calls this before running its actions). */
+    suspend fun recordRun(id: String, at: LocalDateTime) {
+        edit { d -> d.copy(lastRuns = d.lastRuns + (id to at)) }
     }
 
     // ---- settings ----

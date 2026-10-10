@@ -17,6 +17,23 @@ All notable changes to Home Controller are recorded in this file. The format fol
 - Fresh meter readings: metering plugs (power, current, voltage) and the OWON PC321-TY meter are asked to re-measure
   on every other read (UPDATEDPS), as tuya-local does; a device that ignores the request is read as before.
 - Plugin contract: `DeviceSession.updates()`, an optional push channel. Connectors that only poll need no change.
+- Sunrise and sunset schedules: "at sunset", "15 min before sunset", "1 h after sunrise" (up to three hours either
+  way), on chosen days, for any automation and on a device's Schedules card. The times are worked out on the phone
+  (commons-suncalc) from the home's location, set once in Settings → Home → Home location: typed or pasted, or
+  "Use this phone's location", which asks for approximate location only then and reads it once. Until a location is
+  set, sun schedules say so and do not run.
+- Run once: an automation can turn itself off after it has run. If a device did not take the change, it stays on
+  and tries again next time.
+- Every day / Workdays / Weekend shortcuts for a schedule's days. Which days are the weekend is a setting
+  (Settings → Home → Weekend: Friday–Saturday, Saturday–Sunday, Sunday or Friday); until it is chosen it follows the
+  phone's region: Friday–Saturday in Saudi Arabia and the other Friday–Saturday countries, Saturday–Sunday
+  elsewhere. Summaries say "Workdays" and "Weekend" when the days match.
+
+### Changed
+
+- A scheduled time the phone missed (Android asleep, or the app restarting) now still runs if the hub is back
+  within 10 minutes, once; later than that it is skipped until the next time. When each automation last ran is
+  saved, so a restart never runs a time twice, and Automations shows the day of a run that was not today.
 
 ### Fixed
 

@@ -8,12 +8,15 @@ import com.technlov.home.core.DeviceCategory
 import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.Op
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.time.DayOfWeek
+import java.time.LocalDateTime
+import java.time.format.DateTimeParseException
 
 /**
  * The saved data as JSON. The stored shape is a set of DTOs, not the core classes, so the plugin contract can change
@@ -42,6 +45,8 @@ internal data class HomeDataDto(
     val rooms: List<RoomDto> = emptyList(),
     val automations: List<AutomationDto> = emptyList(),
     val settings: SettingsDto = SettingsDto(),
+    /** Automation id -> ISO local date-time of its last run ("2026-10-12T07:30"). */
+    val lastRuns: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -73,7 +78,13 @@ internal data class SettingsDto(
     val theme: String = ThemeMode.SYSTEM.name,
     val dynamicColor: Boolean = true,
     val verboseLogging: Boolean = false,
+    val homeLocation: LocationDto? = null,
+    /** A [Weekend] name; null (or an unknown name) follows the phone's region. */
+    val weekend: String? = null,
 )
+
+@Serializable
+internal data class LocationDto(val latitude: Double, val longitude: Double)
 
 @Serializable
 internal data class OptionDto(val value: String, val label: String)
@@ -135,12 +146,16 @@ internal data class AutomationDto(
     val trigger: TriggerDto,
     val conditions: List<ConditionDto> = emptyList(),
     val actions: List<ActionDto> = emptyList(),
+    val runOnce: Boolean = false,
 )
 
 @Serializable
 internal sealed class TriggerDto {
     @Serializable @SerialName("time")
     data class TimeOfDay(val hour: Int, val minute: Int, val days: List<String> = emptyList()) : TriggerDto()
+
+    @Serializable @SerialName("sun")
+    data class Sun(val event: String, val offsetMinutes: Int = 0, val days: List<String> = emptyList()) : TriggerDto()
 
     @Serializable @SerialName("state")
     data class StateMatches(val device: String, val key: String, val op: String, val value: ValueDto) : TriggerDto()
@@ -169,6 +184,8 @@ internal sealed class ActionDto {
 private inline fun <reified E : Enum<E>> enumOr(name: String, fallback: E): E =
     enumValues<E>().firstOrNull { it.name == name } ?: fallback
 
+private fun List<String>.toDays(): Set<DayOfWeek> = mapNotNull { d -> DayOfWeek.entries.firstOrNull { it.name == d } }.toSet()
+
 internal fun HomeData.toDto() = HomeDataDto(
     devices = devices.map { it.toDto() },
     rooms = rooms.map { RoomDto(it.id, it.name, it.order) },
@@ -180,7 +197,10 @@ internal fun HomeData.toDto() = HomeDataDto(
         theme = settings.theme.name,
         dynamicColor = settings.dynamicColor,
         verboseLogging = settings.verboseLogging,
+        homeLocation = settings.homeLocation?.let { LocationDto(it.latitude, it.longitude) },
+        weekend = settings.weekend?.name,
     ),
+    lastRuns = lastRuns.mapValues { it.value.toString() },
 )
 
 internal fun HomeDataDto.toModel() = HomeData(
@@ -194,7 +214,18 @@ internal fun HomeDataDto.toModel() = HomeData(
         theme = enumOr(settings.theme, ThemeMode.SYSTEM),
         dynamicColor = settings.dynamicColor,
         verboseLogging = settings.verboseLogging,
+        // A place off the map is dropped: sun schedules then ask for the location again.
+        homeLocation = settings.homeLocation?.let { HomeLocation.of(it.latitude, it.longitude) },
+        weekend = settings.weekend?.let { name -> Weekend.entries.firstOrNull { it.name == name } },
     ),
+    // An unreadable time is dropped: at worst that automation is not caught up once.
+    lastRuns = lastRuns.mapNotNull { (id, at) ->
+        try {
+            id to LocalDateTime.parse(at)
+        } catch (e: DateTimeParseException) {
+            null
+        }
+    }.toMap(),
 )
 
 private fun SavedDevice.toDto() = DeviceDto(
@@ -267,6 +298,7 @@ private fun Automation.toDto() = AutomationDto(
     enabled = enabled,
     trigger = when (val t = trigger) {
         is Trigger.TimeOfDay -> TriggerDto.TimeOfDay(t.hour, t.minute, t.days.sorted().map { it.name })
+        is Trigger.Sun -> TriggerDto.Sun(t.event.name, t.offsetMinutes, t.days.sorted().map { it.name })
         is Trigger.StateMatches -> TriggerDto.StateMatches(t.device, t.key, t.op.name, t.value.toDto())
     },
     conditions = conditions.map {
@@ -281,6 +313,7 @@ private fun Automation.toDto() = AutomationDto(
             is Action.Notify -> ActionDto.Notify(it.title, it.text)
         }
     },
+    runOnce = runOnce,
 )
 
 private fun AutomationDto.toModel() = Automation(
@@ -291,7 +324,12 @@ private fun AutomationDto.toModel() = Automation(
         is TriggerDto.TimeOfDay -> Trigger.TimeOfDay(
             hour = t.hour.coerceIn(0, 23),
             minute = t.minute.coerceIn(0, 59),
-            days = t.days.mapNotNull { d -> DayOfWeek.entries.firstOrNull { it.name == d } }.toSet(),
+            days = t.days.toDays(),
+        )
+        is TriggerDto.Sun -> Trigger.Sun(
+            event = enumOr(t.event, SunEvent.SUNSET),
+            offsetMinutes = t.offsetMinutes.coerceIn(-Trigger.Sun.MAX_OFFSET_MINUTES, Trigger.Sun.MAX_OFFSET_MINUTES),
+            days = t.days.toDays(),
         )
         is TriggerDto.StateMatches -> Trigger.StateMatches(t.device, t.key, enumOr(t.op, Op.EQ), t.value.toModel())
     },
@@ -307,4 +345,5 @@ private fun AutomationDto.toModel() = Automation(
             is ActionDto.Notify -> Action.Notify(it.title, it.text)
         }
     },
+    runOnce = runOnce,
 )

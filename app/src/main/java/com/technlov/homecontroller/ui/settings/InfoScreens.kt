@@ -69,6 +69,7 @@ private const val REPO_URL = "https://github.com/Alihkhawaher/Home-Controller"
 private const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
 private const val GREECLIMATE_URL = "https://github.com/cmroche/greeclimate"
 private const val GREE_REMOTE_URL = "https://github.com/tomikaa87/gree-remote"
+private const val SUNCALC_URL = "https://github.com/shred/commons-suncalc"
 
 private fun UriHandler.openSafely(url: String) {
     try {
@@ -292,6 +293,9 @@ fun AboutScreen(onBack: () -> Unit) {
                     }
                     LinkRow(Icons.Rounded.Handshake, "gree-remote", stringResource(R.string.about_credit_gree_remote)) {
                         uri.openSafely(GREE_REMOTE_URL)
+                    }
+                    LinkRow(Icons.Rounded.Handshake, "commons-suncalc", stringResource(R.string.about_credit_suncalc)) {
+                        uri.openSafely(SUNCALC_URL)
                     }
                 }
             }

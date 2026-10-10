@@ -11,13 +11,17 @@ import com.technlov.home.core.DeviceSession
 import com.technlov.home.core.DeviceState
 import com.technlov.home.core.EventLog
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunClock
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.info
+import com.technlov.home.core.key
+import com.technlov.home.core.latestTime
 import com.technlov.home.core.trace
 import com.technlov.home.core.warn
-import com.technlov.home.core.key
 import com.technlov.homecontroller.data.HomeData
+import com.technlov.homecontroller.data.HomeLocation
 import com.technlov.homecontroller.data.HomeRepository
+import com.technlov.homecontroller.data.sunClock
 import com.technlov.homecontroller.data.SecretBox
 import com.technlov.homecontroller.history.HistorySink
 import com.technlov.homecontroller.data.SavedDevice
@@ -42,14 +46,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Duration
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 
@@ -88,6 +93,8 @@ class Hub(
     private val log: EventLog = EventLog.None,
     /** Power history: every successful reading is offered here (electrical readings are kept; the rest ignored). */
     private val history: HistorySink = HistorySink.None,
+    /** Sunrise and sunset at the home (none until its location is set), in the phone's time zone. */
+    private val sunClock: (HomeLocation?) -> SunClock = { it.sunClock() },
 ) {
     private data class SlotView(
         val status: LinkStatus,
@@ -146,9 +153,12 @@ class Hub(
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running.asStateFlow()
 
-    private val _lastRuns = MutableStateFlow<Map<String, LocalDateTime>>(emptyMap())
-    /** When each automation last ran (since the hub started). */
-    val lastRuns: StateFlow<Map<String, LocalDateTime>> = _lastRuns.asStateFlow()
+    /**
+     * When [tick] last checked the automations; null until the first check after the app started. A time that passed
+     * after it was missed (Android dozed) and may be caught up; one at or before it was seen. When each automation
+     * last ran is saved in the repository ([HomeData.lastRuns]), so it outlives a restart.
+     */
+    private var lastCheck: LocalDateTime? = null
 
     /** True while the app is on screen: devices are polled more often. */
     val appVisible = MutableStateFlow(false)
@@ -222,13 +232,18 @@ class Hub(
         }
     }
 
-    /** Runs an automation's actions now (the minute tick, or "Run now" in the editor). */
-    suspend fun execute(automation: Automation, data: HomeData? = null) {
+    /**
+     * Runs an automation's actions now (the minute tick, or "Run now" in the editor). Returns true when every device
+     * took its change; a notification never makes a run fail.
+     */
+    suspend fun execute(automation: Automation, data: HomeData? = null): Boolean {
         val names = data ?: repository.current()
         log.info(LogSource.HUB, "Automation \"${automation.name}\": running ${automation.actions.size} action(s)")
+        var allApplied = true
         for (action in automation.actions) {
             when (action) {
                 is Action.SetValues -> apply(action.device, action.changes).onFailure { error ->
+                    allApplied = false
                     val name = names.device(action.device)?.name ?: action.device
                     log.warn(LogSource.HUB, "Automation \"${automation.name}\": $name did not take the change")
                     runCatching { events.automationFailed(automation, name, DeviceIssue.from(error)) }
@@ -239,24 +254,75 @@ class Hub(
                 }
             }
         }
+        return allApplied
     }
 
     /** One automation pass for the minute [now]. Called every minute by [run]; public for tests. */
     suspend fun tick(now: LocalDateTime) {
         val data = repository.current()
-        val due = dueNow(now, data.automations.filter { it.enabled })
-        for (automation in due) execute(automation, data)
+        val sun = sunClock(data.settings.homeLocation)
+        val due = dueNow(now, data.automations.filter { it.enabled }, sun, minuteTick = true)
+        for (automation in due) {
+            automation.trigger.latestTime(now, sun)?.takeIf { it.isBefore(now.truncatedTo(ChronoUnit.MINUTES)) }?.let { missed ->
+                log.info(LogSource.HUB, "Automation \"${automation.name}\": its ${missed.toLocalTime()} was missed; running it ${Duration.between(missed, now).toMinutes()} min late")
+            }
+            runDue(automation, data)
+        }
     }
 
     /**
      * The automations among [candidates] due at [now], against the states shown and the states of the last check
-     * (a minute tick or a push), which become the new baseline. Their last run is set to [now].
+     * (a minute tick or a push), which become the new baseline. Only the [minuteTick] moves [lastCheck]: a push-driven
+     * check looks at state triggers only, and must not mark a minute as seen before the tick has looked at its times.
+     * Each due automation's run is saved before it returns -- under the lock, so the other check cannot run it again,
+     * and before the actions, so a crash or Android ending the app does not run it twice after a restart.
      */
-    private suspend fun dueNow(now: LocalDateTime, candidates: List<Automation>): List<Automation> = automationMutex.withLock {
+    private suspend fun dueNow(
+        now: LocalDateTime,
+        candidates: List<Automation>,
+        sun: SunClock,
+        minuteTick: Boolean,
+    ): List<Automation> = automationMutex.withLock {
         val states = currentStates()
-        val due = engine.due(now, candidates, states, previousStates, _lastRuns.value)
+        val lastRuns = repository.current().lastRuns
+        val due = engine.due(now, candidates, states, previousStates, lastRuns, lastCheck, sun)
         previousStates = states
-        due.onEach { automation -> _lastRuns.update { it + (automation.id to now) } }
+        if (minuteTick) lastCheck = now
+        for (automation in due) recordRun(automation, now)
+        due
+    }
+
+    /** Runs a due automation; a "run once" one is turned off after a run in which every device took its change. */
+    private suspend fun runDue(automation: Automation, data: HomeData) {
+        val done = execute(automation, data)
+        if (automation.runOnce) finishRunOnce(automation, done)
+    }
+
+    private suspend fun recordRun(automation: Automation, now: LocalDateTime) {
+        try {
+            repository.recordRun(automation.id, now)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // It still runs; the hub's own last check keeps it from running twice until the app restarts.
+            log.warn(LogSource.HUB, "Automation \"${automation.name}\": could not save when it ran", e)
+        }
+    }
+
+    /** "Run once": off after a run in which every device took its change; on after a failed one, to try again. */
+    private suspend fun finishRunOnce(automation: Automation, done: Boolean) {
+        if (!done) {
+            log.info(LogSource.HUB, "Automation \"${automation.name}\" (run once): not every change went through; it stays on")
+            return
+        }
+        try {
+            repository.setAutomationEnabled(automation.id, false)
+            log.info(LogSource.HUB, "Automation \"${automation.name}\" (run once): done, turned off")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(LogSource.HUB, "Automation \"${automation.name}\" (run once): could not turn it off", e)
+        }
     }
 
     // ---- loops ----
@@ -434,11 +500,11 @@ class Hub(
             val data = repository.current()
             val candidates = data.automations.filter { it.enabled && it.trigger is Trigger.StateMatches }
             if (candidates.isEmpty()) return
-            val due = dueNow(clock(), candidates)
+            val due = dueNow(clock(), candidates, SunClock.UNKNOWN, minuteTick = false)
             if (due.isEmpty()) return
             CoroutineScope(currentCoroutineContext().minusKey(Job) + pushWork).launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
-                    for (automation in due) execute(automation, data)
+                    for (automation in due) runDue(automation, data)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

@@ -125,6 +125,7 @@ fun DeviceScreen(
     val history by vm.history.collectAsState()
     val schedules by vm.schedules.collectAsState()
     val runInBackground by vm.runInBackground.collectAsState()
+    val hasHomeLocation by vm.hasHomeLocation.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(vm.messages, snackbar)
     var dialog by rememberSaveable { mutableStateOf<DeviceDialog?>(null) }
@@ -189,7 +190,7 @@ fun DeviceScreen(
             DeviceContent(
                 ui, device, retrying, padding, onApply = guardedApply, onRetry = vm::retry,
                 history = history, onHistoryRange = vm::setHistoryRange,
-                schedules = schedules, runInBackground = runInBackground,
+                schedules = schedules, runInBackground = runInBackground, hasHomeLocation = hasHomeLocation,
                 onOpenSchedule = onOpenSchedule, onScheduleEnabled = vm::setScheduleEnabled, onOpenSettings = onOpenSettings,
             )
         }
@@ -380,6 +381,7 @@ private fun DeviceContent(
     onHistoryRange: (HistoryRange) -> Unit,
     schedules: List<Automation>,
     runInBackground: Boolean,
+    hasHomeLocation: Boolean,
     onOpenSchedule: (String?) -> Unit,
     onScheduleEnabled: (String, Boolean) -> Unit,
     onOpenSettings: () -> Unit,
@@ -486,6 +488,7 @@ private fun DeviceContent(
                         schedules = schedules,
                         capabilities = caps,
                         runInBackground = runInBackground,
+                        hasHomeLocation = hasHomeLocation,
                         onOpen = onOpenSchedule,
                         onEnabled = onScheduleEnabled,
                         onOpenSettings = onOpenSettings,

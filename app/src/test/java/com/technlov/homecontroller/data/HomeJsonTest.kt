@@ -8,14 +8,18 @@ import com.technlov.home.core.DeviceCategory
 import com.technlov.home.core.Keys
 import com.technlov.home.core.Op
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import com.technlov.homecontroller.climateCapabilities
 import com.technlov.homecontroller.exampleRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
+import java.time.LocalDateTime
 
 class HomeJsonTest {
 
@@ -61,6 +65,13 @@ class HomeJsonTest {
                 enabled = false,
                 trigger = Trigger.StateMatches("fake:ac-2", Keys.CURRENT_TEMPERATURE, Op.GE, Value.Num(30.0)),
                 actions = listOf(Action.Notify("Hot", "Office is above 30")),
+                runOnce = true,
+            ),
+            Automation(
+                id = "a3",
+                name = "Before sunset",
+                trigger = Trigger.Sun(SunEvent.SUNSET, -15, setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY)),
+                actions = listOf(Action.SetValues("fake:ac-1", listOf(SetValue(Keys.POWER, Value.Bool(false))))),
             ),
         ),
         settings = AppSettings(
@@ -70,7 +81,10 @@ class HomeJsonTest {
             theme = ThemeMode.DARK,
             dynamicColor = false,
             verboseLogging = true,
+            homeLocation = HomeLocation(51.48, -0.01),
+            weekend = Weekend.FRI,
         ),
+        lastRuns =mapOf("a1" to LocalDateTime.of(2026, 10, 12, 6, 45), "a2" to LocalDateTime.of(2026, 10, 11, 14, 3, 27)),
     )
 
     @Test
@@ -87,6 +101,46 @@ class HomeJsonTest {
         assertEquals(PowerButton.SHOW, HomeJson.decode(unknown).devices.single().powerButton)
         val hidden = """{"devices":[{"connectorId":"fake","id":"a","address":"192.0.2.9","name":"Plug","powerButton":"HIDE"}]}"""
         assertEquals(PowerButton.HIDE, HomeJson.decode(hidden).devices.single().powerButton)
+    }
+
+    @Test
+    fun automationsSavedBeforeRunOnceKeepRepeating() {
+        val old = """{"automations":[{"id":"a","name":"n","trigger":{"type":"time","hour":7,"minute":0},
+            "actions":[{"type":"notify","title":"t","text":"x"}]}]}"""
+        val automation = HomeJson.decode(old).automations.single()
+        assertFalse(automation.runOnce)
+        assertTrue(automation.enabled)
+    }
+
+    @Test
+    fun lastRunsAreSavedAsLocalTimesAndAnUnreadableOneIsDropped() {
+        assertTrue(HomeJson.encode(full).contains("\"lastRuns\":{\"a1\":\"2026-10-12T06:45\""))
+        val json = """{"lastRuns":{"a":"2026-10-12T07:30","b":"yesterday"}}"""
+        assertEquals(mapOf("a" to LocalDateTime.of(2026, 10, 12, 7, 30)), HomeJson.decode(json).lastRuns)
+        assertTrue("saved before runs were kept", HomeJson.decode("""{"automations":[]}""").lastRuns.isEmpty())
+    }
+
+    @Test
+    fun sunTriggersAndTheHomeLocationAreStoredReadablyAndCheckedOnLoad() {
+        val text = HomeJson.encode(full)
+        assertTrue(text.contains("""{"type":"sun","event":"SUNSET","offsetMinutes":-15,"days":["FRIDAY","SATURDAY"]}"""))
+        assertTrue(text.contains(""""homeLocation":{"latitude":51.48,"longitude":-0.01}"""))
+        assertNull("saved before sun schedules: no location", HomeJson.decode("""{"settings":{"theme":"DARK"}}""").settings.homeLocation)
+
+        val odd = """{"automations":[{"id":"s","name":"n","trigger":{"type":"sun","event":"DAWN","offsetMinutes":900},
+            "actions":[{"type":"notify","title":"t","text":"x"}]}],
+            "settings":{"homeLocation":{"latitude":123.0,"longitude":10.0}}}"""
+        val data = HomeJson.decode(odd)
+        assertEquals(Trigger.Sun(SunEvent.SUNSET, Trigger.Sun.MAX_OFFSET_MINUTES), data.automations.single().trigger)
+        assertNull("a place off the map is dropped", data.settings.homeLocation)
+    }
+
+    @Test
+    fun theWeekendIsSavedOnlyOnceChosen() {
+        assertNull("not chosen: the phone's region decides", HomeJson.decode("""{"settings":{}}""").settings.weekend)
+        assertNull("unknown name: back to the region's", HomeJson.decode("""{"settings":{"weekend":"THU_FRI"}}""").settings.weekend)
+        assertEquals(Weekend.FRI_SAT, HomeJson.decode("""{"settings":{"weekend":"FRI_SAT"}}""").settings.weekend)
+        assertTrue(HomeJson.encode(full).contains(""""weekend":"FRI""""))
     }
 
     @Test

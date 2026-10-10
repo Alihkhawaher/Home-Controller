@@ -1,8 +1,10 @@
 package com.technlov.homecontroller.ui.device
 
 import com.technlov.homecontroller.ui.automations.isScheduleFor
-import com.technlov.home.core.Trigger
+import com.technlov.homecontroller.ui.automations.minuteOfDay
+import com.technlov.homecontroller.data.sunClock
 import com.technlov.home.core.Automation
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -86,13 +88,21 @@ class DeviceViewModel(private val container: AppContainer, private val key: Devi
     }
 
     /** Sends [changes]; the hub shows them at once and snaps back with a message if the device refuses. */
-    // ---- schedules (simple time-of-day automations of this device) ----
+    // ---- schedules (simple time-of-day or sunrise / sunset automations of this device), in the order of the day ----
     val schedules: StateFlow<List<Automation>> = container.repository.data
-        .map { d -> d.automations.filter { it.isScheduleFor(key) }.sortedBy { (it.trigger as Trigger.TimeOfDay).let { t -> t.hour * 60 + t.minute } } }
+        .map { d ->
+            val sun = d.settings.homeLocation.sunClock()
+            val today = LocalDate.now()
+            d.automations.filter { it.isScheduleFor(key) }.sortedBy { it.trigger.minuteOfDay(today, sun) }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Schedules run only while the hub runs: with the app open, or always when "Run in background" is on. */
     val runInBackground: StateFlow<Boolean> = container.settings.map { it.runInBackground }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    /** Sunrise and sunset schedules wait for the home's location. */
+    val hasHomeLocation: StateFlow<Boolean> = container.settings.map { it.homeLocation != null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     fun setScheduleEnabled(id: String, enabled: Boolean) {

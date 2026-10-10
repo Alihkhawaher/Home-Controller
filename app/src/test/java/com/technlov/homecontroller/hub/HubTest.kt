@@ -12,14 +12,18 @@ import com.technlov.home.core.EventLog
 import com.technlov.home.core.Keys
 import com.technlov.home.core.Op
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.SunClock
+import com.technlov.home.core.SunEvent
 import com.technlov.home.core.Trigger
 import com.technlov.home.core.Value
 import com.technlov.homecontroller.FakeConnector
 import com.technlov.homecontroller.InMemoryDataStore
 import com.technlov.homecontroller.climateCapabilities
 import com.technlov.homecontroller.data.HomeData
+import com.technlov.homecontroller.data.HomeLocation
 import com.technlov.homecontroller.data.HomeRepository
 import com.technlov.homecontroller.data.SavedDevice
+import com.technlov.homecontroller.data.sunClock
 import com.technlov.homecontroller.exampleRef
 import com.technlov.homecontroller.history.HistorySink
 import kotlinx.coroutines.CompletableDeferred
@@ -33,6 +37,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlin.coroutines.EmptyCoroutineContext
 
 class HubTest {
@@ -59,6 +64,7 @@ class HubTest {
     }
     private var due: List<Automation> = emptyList()
     private var seenPrevious: Map<DeviceKey, DeviceState>? = null
+    private var seenPreviousCheck: LocalDateTime? = null
     private val engine = object : AutomationEngine {
         override fun due(
             now: LocalDateTime,
@@ -66,8 +72,11 @@ class HubTest {
             states: Map<DeviceKey, DeviceState>,
             previousStates: Map<DeviceKey, DeviceState>,
             lastRun: Map<String, LocalDateTime>,
+            previousCheck: LocalDateTime?,
+            sun: SunClock,
         ): List<Automation> {
             seenPrevious = previousStates
+            seenPreviousCheck = previousCheck
             return due
         }
     }
@@ -210,12 +219,137 @@ class HubTest {
         assertEquals(true, hub.live.value.getValue(ac).state!!.bool(Keys.POWER))
         assertEquals(listOf("Cooling" to "Bedroom AC is on"), notifications)
         assertEquals(listOf(Triple("Cool down", "Old TV", DeviceIssue.NoConnector("missing"))), failures)
-        assertEquals(now, hub.lastRuns.value["a1"])
+        assertEquals("the run is saved", now, store.value.lastRuns["a1"])
         assertEquals(emptyMap<DeviceKey, DeviceState>(), seenPrevious)
+        assertNull("nothing checked before the first tick", seenPreviousCheck)
 
         due = emptyList()
         hub.tick(now.plusMinutes(1))
         assertTrue("previous states are handed to the engine", seenPrevious!!.containsKey(ac))
+        assertEquals("so is the previous check", now, seenPreviousCheck)
+    }
+
+    // ---- catch-up: the real engine, with runs saved in the repository ----
+
+    private val morning = Automation("m", "Morning", trigger = Trigger.TimeOfDay(7, 30), actions = listOf(Action.Notify("Morning", "x")))
+
+    private fun hubWithEngine() =
+        Hub(ConnectorRegistry(listOf(connector)), repository, DefaultAutomationEngine(), events, ioContext = EmptyCoroutineContext)
+
+    private fun at(h: Int, m: Int, day: Int = 12) = LocalDateTime.of(2026, 10, day, h, m)
+
+    @Test
+    fun aTimeMissedByThreeMinutesRunsOnceWhenTheHubWakes() = runTest {
+        repository.saveAutomation(morning)
+        val hub = hubWithEngine()
+        hub.tick(at(7, 29))
+        hub.tick(at(7, 33)) // Android dozed through 07:30
+        hub.tick(at(7, 34))
+        hub.tick(at(7, 35))
+        assertEquals(listOf("Morning" to "x"), notifications)
+        assertEquals(at(7, 33), store.value.lastRuns["m"])
+    }
+
+    @Test
+    fun aTimeMissedByThirtyMinutesIsSkipped() = runTest {
+        repository.saveAutomation(morning)
+        val hub = hubWithEngine()
+        hub.tick(at(7, 29))
+        hub.tick(at(8, 0))
+        hub.tick(at(8, 1))
+        assertTrue(notifications.isEmpty())
+        assertNull(store.value.lastRuns["m"])
+    }
+
+    @Test
+    fun aRestartAfterTheRunDoesNotRepeatIt() = runTest {
+        repository.saveAutomation(morning)
+        hubWithEngine().tick(at(7, 30))
+        // The app restarts: a new hub, nothing in memory, the saved run in the repository.
+        val restarted = hubWithEngine()
+        restarted.tick(at(7, 32))
+        restarted.tick(at(7, 33))
+        assertEquals(1, notifications.size)
+    }
+
+    @Test
+    fun aRestartThatMissedTheTimeCatchesItUp() = runTest {
+        repository.saveAutomation(morning)
+        hubWithEngine().tick(at(7, 30, day = 11)) // yesterday
+        // Today the app was ended at 07:28 and is back at 07:33.
+        val restarted = hubWithEngine()
+        restarted.tick(at(7, 33))
+        restarted.tick(at(7, 34))
+        assertEquals(2, notifications.size)
+        assertEquals(at(7, 33), store.value.lastRuns["m"])
+    }
+
+    // ---- sunrise / sunset ----
+
+    @Test
+    fun aSunsetScheduleWaitsForTheHomeLocationThenRunsAtSunsetMinusItsOffset() = runTest {
+        val london = ZoneId.of("Europe/London")
+        val hub = Hub(
+            ConnectorRegistry(listOf(connector)), repository, DefaultAutomationEngine(), events,
+            ioContext = EmptyCoroutineContext, sunClock = { it.sunClock(london) },
+        )
+        val dusk = Automation("dusk", "Dusk", trigger = Trigger.Sun(SunEvent.SUNSET, -15), actions = listOf(Action.Notify("Dusk", "x")))
+        repository.saveAutomation(dusk)
+        hub.tick(LocalDateTime.of(2026, 6, 21, 21, 6))
+        assertTrue("no location yet: a sun schedule cannot run", notifications.isEmpty())
+
+        // Greenwich, rounded to 51.48, 0.00: on 22 June the sun sets at 21:21, so the schedule is due at 21:06.
+        repository.updateSettings { it.copy(homeLocation = HomeLocation.of(51.4779, -0.0015)) }
+        hub.tick(LocalDateTime.of(2026, 6, 22, 21, 5))
+        assertTrue(notifications.isEmpty())
+        hub.tick(LocalDateTime.of(2026, 6, 22, 21, 6))
+        hub.tick(LocalDateTime.of(2026, 6, 22, 21, 7))
+        assertEquals(listOf("Dusk" to "x"), notifications)
+    }
+
+    // ---- run once ----
+
+    private val powerOn = Action.SetValues(ac, listOf(SetValue(Keys.POWER, Value.Bool(true))))
+
+    @Test
+    fun aRunOnceAutomationTurnsItselfOffAfterASuccessfulRun() = runTest {
+        hub.refresh()
+        val once = Automation("once", "Once", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn), runOnce = true)
+        val daily = Automation("daily", "Daily", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn))
+        repository.saveAutomation(once)
+        repository.saveAutomation(daily)
+        due = listOf(once, daily)
+
+        hub.tick(LocalDateTime.of(2026, 10, 10, 18, 0))
+
+        assertEquals(true, hub.live.value.getValue(ac).state!!.bool(Keys.POWER))
+        assertFalse("run once: off after it ran", store.value.automation("once")!!.enabled)
+        assertTrue("an ordinary automation stays on", store.value.automation("daily")!!.enabled)
+    }
+
+    @Test
+    fun aRunOnceAutomationStaysOnWhenADeviceDidNotTakeTheChange() = runTest {
+        hub.refresh()
+        connector.failApplies = true
+        val once = Automation("once", "Once", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn), runOnce = true)
+        repository.saveAutomation(once)
+        due = listOf(once)
+
+        hub.tick(LocalDateTime.of(2026, 10, 10, 18, 0))
+
+        assertEquals(listOf(Triple("Once", "Bedroom AC", DeviceIssue.Failed("refused"))), failures)
+        assertTrue("tries again next time", store.value.automation("once")!!.enabled)
+    }
+
+    @Test
+    fun runNowReportsWhetherEveryDeviceTookTheChange() = runTest {
+        hub.refresh()
+        val once = Automation("once", "Once", trigger = Trigger.TimeOfDay(18, 0), actions = listOf(powerOn), runOnce = true)
+        repository.saveAutomation(once)
+        assertTrue(hub.execute(once))
+        assertTrue("Run now is a try-out: a run-once automation stays on", store.value.automation("once")!!.enabled)
+        val lost = Action.SetValues("missing:lost", listOf(SetValue(Keys.POWER, Value.Bool(true))))
+        assertFalse(hub.execute(once.copy(actions = listOf(powerOn, lost, Action.Notify("t", "x")))))
     }
 
     // ---- pushes (sessions on a live connection) ----
@@ -255,7 +389,7 @@ class HubTest {
         assertEquals(LinkStatus.ONLINE, shown.status)
         assertEquals(listOf("Too hot" to "The bedroom is at 31"), notifications)
         assertEquals("the pushed reading goes to the history", readings + 1, kept.size)
-        assertTrue(live.lastRuns.value.containsKey("too-hot"))
+        assertTrue("the run is saved", store.value.lastRuns.containsKey("too-hot"))
 
         // Still hot: neither another push nor the next minute's tick runs it again (one edge, one run).
         connector.push("ac-1", mapOf(Keys.CURRENT_TEMPERATURE to Value.Num(31.5)))
@@ -263,6 +397,31 @@ class HubTest {
         live.tick(minute.plusMinutes(1))
         assertEquals(1, notifications.size)
         assertEquals(31.5, live.live.value.getValue(ac).state!!.number(Keys.CURRENT_TEMPERATURE)!!, 0.0)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun aPushCheckedBetweenAMissedTimeAndTheNextTickDoesNotSwallowTheSchedule() = runTest {
+        connector.pushing = true
+        val tooHot = Automation(
+            id = "too-hot",
+            name = "Too hot",
+            trigger = Trigger.StateMatches(ac, Keys.CURRENT_TEMPERATURE, Op.GE, Value.Num(30.0)),
+            actions = listOf(Action.Notify("Too hot", "x")),
+        )
+        repository.saveAutomation(morning)
+        repository.saveAutomation(tooHot)
+        val live = Hub(
+            ConnectorRegistry(listOf(connector)), repository, DefaultAutomationEngine(), events,
+            clock = { at(7, 30).plusSeconds(30) }, ioContext = EmptyCoroutineContext,
+        )
+        live.refresh(listOf(ac))
+        live.tick(at(7, 29))
+        // Android dozes through the 07:30 tick, but a push at 07:30:30 is checked against the state triggers.
+        connector.push("ac-1", mapOf(Keys.CURRENT_TEMPERATURE to Value.Num(28.0)))
+        runCurrent()
+        live.tick(at(7, 31))
+        assertEquals("the push check did not mark 07:30 as seen", listOf("Morning" to "x"), notifications)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

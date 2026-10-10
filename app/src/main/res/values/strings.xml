@@ -183,6 +183,8 @@
     <string name="trigger_device">Device</string>
     <string name="trigger_repeat">Repeat</string>
     <string name="days_every_day">Every day</string>
+    <string name="days_workdays">Workdays</string>
+    <string name="days_weekend">Weekend</string>
     <string name="time_picker_title">Select time</string>
     <string name="automation_device_label">Device</string>
     <string name="automation_value_label">Value</string>
@@ -197,6 +199,11 @@
     <string name="automation_device_missing">This device was removed. Pick another one.</string>
     <string name="automation_enabled">Enabled</string>
     <string name="automation_enabled_text">Runs by itself when it is due</string>
+    <string name="automation_run_once">Run once</string>
+    <string name="automation_run_once_text">Turns itself off after it has run. If a device doesn’t take the change, it stays on and tries again next time.</string>
+    <string name="repeat_once">Once</string>
+    <!-- Two parts of a summary, e.g. "Once · Fri, Sat". -->
+    <string name="summary_pair">%1$s · %2$s</string>
     <string name="automation_run_now">Run now</string>
     <string name="automation_delete_title">Delete automation?</string>
     <string name="automation_delete_text">“%1$s” will be deleted.</string>
@@ -205,6 +212,8 @@
     <string name="automation_auto_name_time">At %1$s</string>
     <string name="automation_auto_name_state">When %1$s changes</string>
     <string name="automation_last_ran">Last ran at %1$s</string>
+    <!-- %1$s: a short date such as "Fri 9 Oct"; %2$s: the time. -->
+    <string name="automation_last_ran_on">Last ran %1$s at %2$s</string>
     <string name="automation_failed_title">%1$s didn’t finish</string>
     <string name="automation_failed_text">Couldn’t change %1$s: %2$s</string>
     <string name="message_automation_running">Running “%1$s”…</string>
@@ -288,6 +297,7 @@
     <string name="about_credits">Credits</string>
     <string name="about_credit_greeclimate">For documenting the Gree protocol</string>
     <string name="about_credit_gree_remote">For documenting the Gree protocol</string>
+    <string name="about_credit_suncalc">Sunrise and sunset times, worked out on the phone</string>
 
     <!-- Hub notifications -->
     <string name="channel_hub">Hub status</string>
@@ -322,7 +332,7 @@
     <string name="pairing_hotspot_title">Find the device</string>
     <string name="pairing_hotspot_text">In setup mode the device opens its own Wi-Fi hotspot. Pick it below.</string>
     <string name="pairing_permission_title">Allow Wi-Fi scanning</string>
-    <string name="pairing_permission_text">To find the device’s hotspot, Android needs the location and nearby devices permissions: that is how it lets apps see Wi-Fi networks. Home Controller only looks for the device’s hotspot; it never uses your location.</string>
+    <string name="pairing_permission_text">To find the device’s hotspot, Android needs the location and nearby devices permissions: that is how it lets apps see Wi-Fi networks. Here Home Controller only looks for the device’s hotspot; it doesn’t read your location.</string>
     <string name="pairing_location_off">Turn on Location: Android shows Wi-Fi networks to apps only when it is on.</string>
     <string name="pairing_hotspots_nearby">Device hotspots nearby</string>
     <string name="pairing_hotspots_scanning">Looking for device hotspots…</string>
@@ -449,4 +459,58 @@
     <string name="schedules_empty">No schedules yet. A schedule switches this device at set times, on the days you pick.</string>
     <string name="schedules_background_off">Schedules run on this phone: right now only while the app is open. Turn on Run in background so they also run when it is closed.</string>
     <string name="schedules_open_settings">Open Settings</string>
+
+    <!-- Sunrise and sunset triggers -->
+    <string name="trigger_at_time">At a time</string>
+    <string name="sun_sunrise">Sunrise</string>
+    <string name="sun_sunset">Sunset</string>
+    <string name="sun_at_sunrise">At sunrise</string>
+    <string name="sun_at_sunset">At sunset</string>
+    <!-- %1$s: a duration such as "15 min" or "1 h 30 min". -->
+    <string name="sun_before_sunrise">%1$s before sunrise</string>
+    <string name="sun_after_sunrise">%1$s after sunrise</string>
+    <string name="sun_before_sunset">%1$s before sunset</string>
+    <string name="sun_after_sunset">%1$s after sunset</string>
+    <!-- Short forms for summaries: "Sunset − 15 min", "Sunrise + 1 h". -->
+    <string name="sun_short_before">%1$s − %2$s</string>
+    <string name="sun_short_after">%1$s + %2$s</string>
+    <string name="duration_hours">%1$d h</string>
+    <string name="duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="action_earlier">Earlier</string>
+    <string name="action_later">Later</string>
+    <!-- %1$s: "today at 17:27", "tomorrow at 05:50" or "Fri at 17:27". -->
+    <string name="sun_next">Next: %1$s</string>
+    <string name="sun_next_none">The sun doesn’t rise or set here on these days in the coming week.</string>
+    <string name="when_today">today at %1$s</string>
+    <string name="when_tomorrow">tomorrow at %1$s</string>
+    <string name="when_day">%1$s at %2$s</string>
+    <string name="sun_needs_location">Set your home’s location so the phone knows when the sun rises and sets. Sunrise and sunset schedules don’t run until then.</string>
+    <string name="sun_needs_location_short">Needs your home’s location: set it in Settings</string>
+    <string name="sun_set_location">Set home location</string>
+
+    <!-- Home location (for sunrise and sunset) -->
+    <string name="settings_home_location">Home location</string>
+    <string name="settings_home_location_none">Not set. Sunrise and sunset schedules need it.</string>
+    <!-- %1$s: the location as "51.48, -0.01"; %2$s and %3$s: times. -->
+    <string name="settings_home_location_today">%1$s · today sunrise %2$s, sunset %3$s</string>
+    <string name="location_title">Home location</string>
+    <string name="location_text">Sunrise and sunset are worked out on this phone from where your home is. Use this phone’s location while you’re at home, or type it. It stays on this phone, rounded to about a kilometre.</string>
+    <string name="location_use_phone">Use this phone’s location</string>
+    <string name="location_finding">Finding this phone…</string>
+    <string name="location_found">Found it. Tap Save to keep it.</string>
+    <string name="location_off">Location is off on this phone. Turn it on, or type the location below.</string>
+    <string name="location_denied">Without location access, type the location below.</string>
+    <string name="location_not_found">The phone couldn’t tell where it is. Try again, or type the location below.</string>
+    <string name="location_field">Latitude, longitude</string>
+    <string name="location_placeholder" translatable="false">51.48, -0.01</string>
+    <string name="location_field_hint">As a maps app shows it, for example 51.48, -0.01</string>
+    <string name="location_invalid">Type it like 51.48, -0.01</string>
+
+    <!-- Weekend (for the Workdays / Weekend shortcuts in schedules) -->
+    <string name="settings_weekend">Weekend</string>
+    <!-- Two day names, e.g. "Friday and Saturday". -->
+    <string name="weekend_two_days">%1$s and %2$s</string>
+    <string name="weekend_from_region">usual in your region</string>
+    <string name="weekend_region_default">Usual in your region</string>
+    <string name="weekend_dialog_text">Used for the Workdays and Weekend shortcuts when you pick a schedule’s days.</string>
 </resources>

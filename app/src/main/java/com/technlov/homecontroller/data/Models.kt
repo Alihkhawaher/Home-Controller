@@ -5,6 +5,7 @@ import com.technlov.home.core.Capability
 import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.key
+import java.time.LocalDateTime
 
 /**
  * A device the user added: what the connector found ([ref]) plus what the user chose (name, room, visibility,
@@ -43,6 +44,10 @@ data class AppSettings(
     val dynamicColor: Boolean = true,
     /** Diagnostics: also record every message to and from devices (the log grows faster). */
     val verboseLogging: Boolean = false,
+    /** Where the home is, for sunrise and sunset schedules; null until the user sets it (they don't run till then). */
+    val homeLocation: HomeLocation? = null,
+    /** The user's weekend; null until they pick one: then the phone's region decides ([Weekend.forRegion]). */
+    val weekend: Weekend? = null,
 ) {
     companion object {
         const val DEFAULT_FOREGROUND_POLL = 10
@@ -58,6 +63,11 @@ data class HomeData(
     val rooms: List<Room> = emptyList(),
     val automations: List<Automation> = emptyList(),
     val settings: AppSettings = AppSettings(),
+    /**
+     * When each automation last ran (phone-local time), by automation id. Saved, so a restart never runs a time
+     * twice and a time the hub missed can still be caught up.
+     */
+    val lastRuns: Map<String, LocalDateTime> = emptyMap(),
 ) {
     val sortedRooms: List<Room> get() = rooms.sortedWith(compareBy({ it.order }, { it.name }))
     val sortedDevices: List<SavedDevice> get() = devices.sortedWith(compareBy({ it.order }, { it.name }))
