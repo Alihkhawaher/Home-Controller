@@ -1,5 +1,6 @@
 package com.technlov.homecontroller.ui.automations
 
+import com.technlov.home.core.DeviceKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.technlov.home.core.Automation
@@ -41,7 +42,12 @@ class AutomationsViewModel(private val container: AppContainer) : ViewModel() {
     }
 }
 
-class AutomationEditorViewModel(private val container: AppContainer, private val automationId: String?) : ViewModel() {
+class AutomationEditorViewModel(
+    private val container: AppContainer,
+    private val automationId: String?,
+    /** A new automation opened from a device's "Add schedule": starts as that device's schedule. */
+    private val prefillDevice: DeviceKey? = null,
+) : ViewModel() {
     private val _draft = MutableStateFlow<AutomationDraft?>(null)
     val draft: StateFlow<AutomationDraft?> = _draft.asStateFlow()
 
@@ -54,8 +60,11 @@ class AutomationEditorViewModel(private val container: AppContainer, private val
 
     init {
         viewModelScope.launch {
-            val existing = automationId?.let { container.repository.current().automation(it) }
+            val data = container.repository.current()
+            val existing = automationId?.let { data.automation(it) }
+            val forDevice = prefillDevice?.let { key -> deviceOptions(data, container.hub.live.value).firstOrNull { it.key == key } }
             _draft.value = existing?.let { AutomationDraft.from(it) }
+                ?: forDevice?.let { AutomationDraft.newSchedule(HomeRepository.newId(), it) }
                 ?: AutomationDraft(id = HomeRepository.newId(), isNew = true)
         }
     }

@@ -103,8 +103,10 @@ import java.util.Locale
 private typealias DraftUpdate = ((AutomationDraft) -> AutomationDraft) -> Unit
 
 @Composable
-fun AutomationEditorScreen(automationId: String?, onDone: () -> Unit) {
-    val vm = appViewModel(key = "automation:${automationId ?: "new"}") { AutomationEditorViewModel(it, automationId) }
+fun AutomationEditorScreen(automationId: String?, onDone: () -> Unit, prefillDevice: String? = null) {
+    val vm = appViewModel(key = "automation:${automationId ?: "new"}:${prefillDevice.orEmpty()}") {
+        AutomationEditorViewModel(it, automationId, prefillDevice)
+    }
     val draftOrNull by vm.draft.collectAsState()
     val devices by vm.devices.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -293,10 +295,6 @@ private fun problemText(problem: DraftProblem): String = stringResource(
     },
 )
 
-private fun defaultChanges(device: DeviceOption): List<SetValue> {
-    val first = device.settable.firstOrNull { it is Capability.Power } ?: device.settable.firstOrNull() ?: return emptyList()
-    return listOf(SetValue(first.key, defaultValue(first, null)))
-}
 
 // ---- trigger ----
 

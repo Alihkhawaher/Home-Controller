@@ -1,5 +1,8 @@
 package com.technlov.homecontroller.ui.device
 
+import com.technlov.homecontroller.ui.automations.isScheduleFor
+import com.technlov.home.core.Trigger
+import com.technlov.home.core.Automation
 import java.time.ZoneId
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -83,6 +86,19 @@ class DeviceViewModel(private val container: AppContainer, private val key: Devi
     }
 
     /** Sends [changes]; the hub shows them at once and snaps back with a message if the device refuses. */
+    // ---- schedules (simple time-of-day automations of this device) ----
+    val schedules: StateFlow<List<Automation>> = container.repository.data
+        .map { d -> d.automations.filter { it.isScheduleFor(key) }.sortedBy { (it.trigger as Trigger.TimeOfDay).let { t -> t.hour * 60 + t.minute } } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Schedules run only while the hub runs: with the app open, or always when "Run in background" is on. */
+    val runInBackground: StateFlow<Boolean> = container.settings.map { it.runInBackground }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setScheduleEnabled(id: String, enabled: Boolean) {
+        viewModelScope.launch { container.repository.setAutomationEnabled(id, enabled) }
+    }
+
     // ---- power history ----
     private val historyRange = MutableStateFlow(HistoryRange.DAY_1)
     private val _history = MutableStateFlow<PowerHistoryUi?>(null)

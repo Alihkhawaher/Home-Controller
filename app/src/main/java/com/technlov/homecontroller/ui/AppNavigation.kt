@@ -63,7 +63,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val DISCOVER = "discover"
     const val DEVICE = "device/{key}"
-    const val AUTOMATION = "automation/{id}"
+    const val AUTOMATION = "automation/{id}?device={device}"
     const val PLUGINS = "settings/plugins"
     const val ABOUT = "settings/about"
     const val ROOMS = "settings/rooms"
@@ -72,7 +72,8 @@ object Routes {
     const val NEW = "new"
 
     fun device(key: String) = "device/${Uri.encode(key)}"
-    fun automation(id: String?) = "automation/${Uri.encode(id ?: NEW)}"
+    fun automation(id: String?, device: String? = null) =
+        "automation/${Uri.encode(id ?: NEW)}" + (device?.let { "?device=${Uri.encode(it)}" } ?: "")
 }
 
 private data class TopLevel(val route: String, val label: Int, val selected: ImageVector, val unselected: ImageVector)
@@ -171,11 +172,26 @@ fun HomeControllerApp() {
             }
             composable(Routes.DEVICE, arguments = listOf(navArgument("key") { type = NavType.StringType })) { entry ->
                 val key = entry.arguments?.getString("key").orEmpty()
-                DeviceScreen(deviceKey = key, onBack = { nav.backFrom(entry) })
+                DeviceScreen(
+                    deviceKey = key,
+                    onBack = { nav.backFrom(entry) },
+                    onOpenSchedule = { id -> nav.navigate(Routes.automation(id, device = key)) },
+                    onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                )
             }
-            composable(Routes.AUTOMATION, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            composable(
+                Routes.AUTOMATION,
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType },
+                    navArgument("device") { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { entry ->
                 val id = entry.arguments?.getString("id")?.takeIf { it != Routes.NEW }
-                AutomationEditorScreen(automationId = id, onDone = { nav.backFrom(entry) })
+                AutomationEditorScreen(
+                    automationId = id,
+                    onDone = { nav.backFrom(entry) },
+                    prefillDevice = entry.arguments?.getString("device"),
+                )
             }
             composable(Routes.PLUGINS) { entry -> PluginsScreen(onBack = { nav.backFrom(entry) }) }
             composable(Routes.ABOUT) { entry -> AboutScreen(onBack = { nav.backFrom(entry) }) }

@@ -80,6 +80,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.technlov.home.core.Automation
 import com.technlov.home.core.Capability
 import com.technlov.home.core.DeviceKey
 import com.technlov.home.core.DeviceState
@@ -112,11 +113,18 @@ import kotlinx.coroutines.delay
 private enum class DeviceDialog { RENAME, ROOM, POWER_BUTTON, REMOVE }
 
 @Composable
-fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
+fun DeviceScreen(
+    deviceKey: DeviceKey,
+    onBack: () -> Unit,
+    onOpenSchedule: (automationId: String?) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+) {
     val vm = appViewModel(key = "device:$deviceKey") { DeviceViewModel(it, deviceKey) }
     val ui by vm.ui.collectAsState()
     val retrying by vm.retrying.collectAsState()
     val history by vm.history.collectAsState()
+    val schedules by vm.schedules.collectAsState()
+    val runInBackground by vm.runInBackground.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     MessageEffect(vm.messages, snackbar)
     var dialog by rememberSaveable { mutableStateOf<DeviceDialog?>(null) }
@@ -181,6 +189,8 @@ fun DeviceScreen(deviceKey: DeviceKey, onBack: () -> Unit) {
             DeviceContent(
                 ui, device, retrying, padding, onApply = guardedApply, onRetry = vm::retry,
                 history = history, onHistoryRange = vm::setHistoryRange,
+                schedules = schedules, runInBackground = runInBackground,
+                onOpenSchedule = onOpenSchedule, onScheduleEnabled = vm::setScheduleEnabled, onOpenSettings = onOpenSettings,
             )
         }
     }
@@ -368,6 +378,11 @@ private fun DeviceContent(
     onRetry: () -> Unit,
     history: PowerHistoryUi?,
     onHistoryRange: (HistoryRange) -> Unit,
+    schedules: List<Automation>,
+    runInBackground: Boolean,
+    onOpenSchedule: (String?) -> Unit,
+    onScheduleEnabled: (String, Boolean) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val caps = ui.capabilities
     val state = ui.state
@@ -456,6 +471,25 @@ private fun DeviceContent(
                             }
                         }
                     }
+                }
+            }
+        }
+        val settable = caps.any {
+            it is Capability.Power || (it is Capability.Choice && it.writable) ||
+                (it is Capability.Number && it.writable) || (it is Capability.Toggle && it.writable)
+        }
+        if (settable) {
+            item(key = "schedules") {
+                Column {
+                    SectionHeader(stringResource(R.string.schedules_title))
+                    SchedulesCard(
+                        schedules = schedules,
+                        capabilities = caps,
+                        runInBackground = runInBackground,
+                        onOpen = onOpenSchedule,
+                        onEnabled = onScheduleEnabled,
+                        onOpenSettings = onOpenSettings,
+                    )
                 }
             }
         }

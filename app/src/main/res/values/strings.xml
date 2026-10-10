@@ -442,4 +442,11 @@
     <string name="history_collecting">Collecting readings: the phone keeps them while it is on this Wi-Fi with the hub running. The first points appear within a minute.</string>
     <string name="history_note_counter">Energy from the meter’s own counter: exact, even for times the phone was away.</string>
     <string name="history_note_power">Energy worked out from power readings while the phone was home; times it was away are left out.</string>
+
+    <!-- Per-device schedules -->
+    <string name="schedules_title">Schedules</string>
+    <string name="schedules_add">Add schedule</string>
+    <string name="schedules_empty">No schedules yet. A schedule switches this device at set times, on the days you pick.</string>
+    <string name="schedules_background_off">Schedules run on this phone: right now only while the app is open. Turn on Run in background so they also run when it is closed.</string>
+    <string name="schedules_open_settings">Open Settings</string>
 </resources>

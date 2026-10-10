@@ -1,5 +1,6 @@
 package com.technlov.homecontroller.ui.automations
 
+import com.technlov.home.core.SetValue
 import com.technlov.home.core.Action
 import com.technlov.home.core.Automation
 import com.technlov.home.core.Capability
@@ -48,6 +49,20 @@ fun deviceOptions(data: HomeData, live: Map<DeviceKey, DeviceLive>): List<Device
         DeviceOption(device.key, device.name, capabilities, link?.state?.values.orEmpty())
     }
 
+/** What a new action on [device] starts with: power on if it has power, else its first settable value. */
+fun defaultChanges(device: DeviceOption): List<SetValue> {
+    val first = device.settable.firstOrNull { it is Capability.Power } ?: device.settable.firstOrNull() ?: return emptyList()
+    return listOf(SetValue(first.key, defaultValue(first, null)))
+}
+
+/**
+ * A "schedule" of [device]: an automation that only says "at this time, on these days, set this device". These are
+ * listed on the device's page; anything with conditions, other devices or notifications stays in Automations only.
+ */
+fun Automation.isScheduleFor(device: DeviceKey): Boolean =
+    trigger is Trigger.TimeOfDay && conditions.isEmpty() && actions.isNotEmpty() &&
+        actions.all { it is Action.SetValues && it.device == device }
+
 /** The editor's working copy of an automation. Pure; converted to and from [Automation]. */
 data class AutomationDraft(
     val id: String,
@@ -90,6 +105,14 @@ data class AutomationDraft(
     }
 
     companion object {
+        /** A new schedule for [device]: 07:00 every day, its default change (power on, usually). */
+        fun newSchedule(id: String, device: DeviceOption): AutomationDraft = AutomationDraft(
+            id = id,
+            isNew = true,
+            kind = TriggerKind.TIME,
+            actions = listOf(Action.SetValues(device.key, defaultChanges(device))),
+        )
+
         fun from(automation: Automation): AutomationDraft {
             val base = AutomationDraft(
                 id = automation.id,
