@@ -93,9 +93,10 @@ first, and a session closes its socket when it is closed.
 
 A background reader takes every frame the device sends:
 
-- **Replies.** The answer to the request in flight is matched by command, and below 3.5 also by sequence number,
-  which those devices echo (3.5 devices number their frames on their own) — tinytuya's rule. Many devices first send
-  an empty acknowledgement (a "null ack") and then the data; that is waited out.
+- **Replies.** The answer to the request in flight is matched by command, and below 3.4 also by sequence number,
+  which those devices echo. 3.4 and 3.5 devices number their frames on their own: on real hardware a 3.4 plug
+  answered our sequence number 3 with 21396, while a 3.3 alarm host echoed every one. Many devices first send an
+  empty acknowledgement (a "null ack") and then the data; that is waited out.
 - **Pushes.** A STATUS frame (`0x08`) is the device reporting a change on its own: a button pressed, a change made in
   another app, an alarm going off, or the change a command just made. It is never taken for a reply. The session
   hands it to the hub at once, as a whole state, through `DeviceSession.updates()`.

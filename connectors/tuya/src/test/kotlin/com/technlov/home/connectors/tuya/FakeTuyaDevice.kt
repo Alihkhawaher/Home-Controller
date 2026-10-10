@@ -12,7 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * DP_QUERY, CONTROL, HEART_BEAT, UPDATEDPS, STATUS pushes) so a real [TuyaClient] can drive it end to end, and it
  * behaves like the real thing where that matters:
  *  - it takes ONE connection at a time and refuses a second while one is open ([exclusive]);
- *  - below 3.5 a reply carries the request's sequence number; a 3.5 device numbers its frames itself;
+ *  - below 3.4 a reply carries the request's sequence number; a 3.4 or 3.5 device numbers its frames itself;
  *  - a command is acknowledged with an empty frame and the change then reported as a STATUS push ([echoControl]
  *    switches to the other style, the change echoed in the reply);
  *  - meter readings ([measure]) only reach a status query after an UPDATEDPS asked for them.
@@ -32,7 +32,7 @@ class FakeTuyaDevice(
     private val versionBytes = versionText.trim().toByteArray(Charsets.US_ASCII)
     private val versionHeader = versionBytes + ByteArray(12)
     private val deviceNonce = "FAKEDEVICENONCE1".toByteArray(Charsets.US_ASCII) // 16 bytes
-    private var devSeqno = 1L
+    private var devSeqno = 21_396L // the device's own count, far from ours (as on the real 3.4 plug)
 
     /** The control commands the device received, as applied dp maps (for assertions). */
     val controlCommands = mutableListOf<Map<String, Any?>>()
@@ -247,8 +247,11 @@ class FakeTuyaDevice(
         return if (fresh.isEmpty()) listOf(ack) else listOf(ack, statusFrame(link, fresh))
     }
 
-    /** Below 3.5 a reply echoes the request's sequence number; 3.5 devices count on their own. */
-    private fun replySeqno(requestSeqno: Long): Long = if (version >= 3.5) devSeqno++ else requestSeqno
+    /**
+     * Below 3.4 a reply echoes the request's sequence number; 3.4 and 3.5 devices count on their own (a real 3.4 plug
+     * answered our seq 3 with 21396, a 3.3 alarm host echoed every one -- seen live on 2026-10-10).
+     */
+    private fun replySeqno(requestSeqno: Long): Long = if (version >= 3.4) devSeqno++ else requestSeqno
 
     /** A STATUS push, with the version header real devices put in front of it (tinytuya strips it). */
     private fun statusFrame(link: Link, changes: Map<String, Any?>): ByteArray {

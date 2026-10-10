@@ -25,10 +25,10 @@ import java.util.concurrent.atomic.AtomicReference
  * The Tuya LAN protocol for one device over ONE TCP connection that stays open while the session lives. [connect]
  * opens it (negotiating a session key on 3.4/3.5) and starts a background reader that takes every frame the device
  * sends:
- *  - the answer to the request in flight goes to that request. It is matched by command, and below 3.5 also by
- *    sequence number, which those devices echo (3.5 devices number their frames on their own) -- the rule of
- *    tinytuya's `_get_retcode`. A device that first sends an empty acknowledgement and then the data (the "null ack"
- *    tinytuya's `_send_receive` waits out) is waited out too;
+ *  - the answer to the request in flight goes to that request. It is matched by command, and below 3.4 also by
+ *    sequence number, which those devices echo. 3.4 and 3.5 devices number their frames on their own (seen live: a
+ *    3.4 plug answered our seq 3 with 21396, a 3.3 alarm host echoed every one). A device that first sends an empty
+ *    acknowledgement and then the data (the "null ack" tinytuya's `_send_receive` waits out) is waited out too;
  *  - a STATUS frame (0x08) is the device reporting a change on its own: a push;
  *  - a HEART_BEAT answer only proves the connection is alive.
  * The data points of every frame that carries some go to [onDps] in the order they arrive, so the session's view is
@@ -288,7 +288,7 @@ class TuyaClient(
     /** Gives one frame to the request it answers, to [onDps] as a push, or to nobody (a heartbeat answer, a stray ack). */
     private fun route(frame: TuyaFrame) {
         val p = pending.get()
-        val replyMatch = p != null && frame.cmd == p.cmd && (version >= 3.5 || frame.seqno == p.seqno)
+        val replyMatch = p != null && frame.cmd == p.cmd && (version >= 3.4 || frame.seqno == p.seqno)
         if (version < 3.5 && !frame.crcGood) {
             log.trace(SOURCE) { "<- $host cmd=0x${frame.cmd.toString(16)} seq=${frame.seqno} failed its integrity check" }
             if (replyMatch) finish(p!!, null, TuyaProtocolException("$host: reply failed its integrity check"))

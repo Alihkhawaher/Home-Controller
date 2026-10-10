@@ -100,7 +100,24 @@ class TuyaLiveConnectionTest {
         assertEquals(240.0, session.read().number(TuyaKeys.COUNTDOWN)!!, 0.0)
     }
 
-    /** Below 3.5 the device echoes the sequence number: a late reply to an earlier query is not this query's answer. */
+    @Test fun aReplyIsTakenAtOnce33() = runTest { replyTakenAtOnce("3.3") }
+    @Test fun aReplyIsTakenAtOnce34() = runTest { replyTakenAtOnce("3.4") }
+    @Test fun aReplyIsTakenAtOnce35() = runTest { replyTakenAtOnce("3.5") }
+
+    /** Whether or not the device echoes our sequence number, its reply answers the query at once: no timeout waited out. */
+    private suspend fun TestScope.replyTakenAtOnce(version: String) {
+        val dev = FakeTuyaDevice(versionText = version, dps = switchDps())
+        val session = connector(FakeTuyaLan(dev)).open(ref(dev, version))
+        repeat(3) {
+            dev.dps["9"] = 60 * (it + 1)
+            val before = currentTime
+            val state = session.read()
+            assertEquals("v$version read ${it + 1} waited", before, currentTime)
+            assertEquals(60.0 * (it + 1), state.number(TuyaKeys.COUNTDOWN)!!, 0.0)
+        }
+    }
+
+    /** Below 3.4 the device echoes the sequence number: a late reply to an earlier query is not this query's answer. */
     @Test
     fun aLateReplyToAnEarlierRequestIsNotTakenForTheReply() = runTest {
         val dev = FakeTuyaDevice(versionText = "3.3", dps = switchDps())
