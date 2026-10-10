@@ -5,6 +5,14 @@ import androidx.compose.material.icons.automirrored.rounded.Input
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.Park
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.HourglassEmpty
+import androidx.compose.material.icons.rounded.Highlight
+import androidx.compose.material.icons.rounded.Dialpad
+import androidx.compose.material.icons.rounded.BatteryStd
 import androidx.compose.material.icons.rounded.TimerOff
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Lock
@@ -133,6 +141,19 @@ fun capabilityIcon(key: String): ImageVector = when (key) {
     "relay_status" -> Icons.Rounded.PowerSettingsNew
     "light_mode" -> Icons.Rounded.Lightbulb
     "overcharge_switch" -> Icons.Rounded.Bolt
+    // Gree extras
+    "fresh_air" -> Icons.Rounded.Park
+    "steady_heat" -> Icons.Rounded.LocalFireDepartment
+    // Tuya alarm host and smoke alarm (before the "switch*" fallback below, which means a plug outlet)
+    "master_mode" -> Icons.Rounded.Security
+    "master_state", "switch_alarm_propel" -> Icons.Rounded.NotificationsActive
+    "delay_set", "alarm_delay_time", "alarm_time" -> Icons.Rounded.HourglassEmpty
+    "switch_alarm_sound" -> Icons.AutoMirrored.Rounded.VolumeUp
+    "switch_alarm_light" -> Icons.Rounded.Highlight
+    "switch_kb_sound", "switch_kb_light" -> Icons.Rounded.Dialpad
+    "muffling" -> Icons.AutoMirrored.Rounded.VolumeOff
+    "smoke_sensor_status" -> Icons.Rounded.Sensors
+    "battery_percentage" -> Icons.Rounded.BatteryStd
     else -> when {
         // Tuya per-product meter codes (phase_a_power, power_total, energy_total...) and any custom dp.
         key.contains("energy") -> Icons.Rounded.EnergySavingsLeaf

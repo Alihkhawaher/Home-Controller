@@ -89,8 +89,8 @@ class GreeModelTest {
             listOf(
                 Keys.POWER, Keys.MODE, Keys.TARGET_TEMPERATURE, Keys.CURRENT_TEMPERATURE, Keys.FAN_SPEED,
                 Keys.SWING_VERTICAL, Keys.SWING_HORIZONTAL, Keys.DISPLAY_LIGHT, GreeKeys.TURBO, GreeKeys.QUIET,
-                GreeKeys.SLEEP, GreeKeys.HEALTH, GreeKeys.X_FAN, Keys.FAULT, Keys.FIRMWARE, GreeKeys.CLEAN_FILTER,
-                GreeKeys.CLOCK,
+                GreeKeys.SLEEP, GreeKeys.HEALTH, GreeKeys.X_FAN, GreeKeys.FRESH_AIR, GreeKeys.STEADY_HEAT,
+                GreeKeys.ENERGY_SAVING, Keys.FAULT, Keys.FIRMWARE, GreeKeys.CLEAN_FILTER, GreeKeys.CLOCK,
             ),
             caps.map { it.key },
         )
@@ -105,6 +105,9 @@ class GreeModelTest {
         assertFalse(room.diagnostic)
         assertEquals("Ioniser", byKey[GreeKeys.HEALTH]!!.label)
         assertEquals("X-Fan", byKey[GreeKeys.X_FAN]!!.label)
+        assertEquals("Fresh air", byKey[GreeKeys.FRESH_AIR]!!.label)
+        assertEquals("8 °C frost protection", byKey[GreeKeys.STEADY_HEAT]!!.label)
+        assertTrue(byKey[GreeKeys.ENERGY_SAVING] is Capability.Toggle)
         for (k in listOf(Keys.FAULT, Keys.FIRMWARE, GreeKeys.CLEAN_FILTER, GreeKeys.CLOCK)) {
             assertTrue(k, (byKey[k] as Capability.Reading).diagnostic)
         }
@@ -118,7 +121,13 @@ class GreeModelTest {
         assertFalse(Keys.SWING_HORIZONTAL in keys)
         assertFalse(GreeKeys.QUIET in keys)
         assertTrue(Keys.SWING_VERTICAL in keys)
-        assertEquals(17, GreeModel.capabilities(emptySet()).size)
+        assertEquals(20, GreeModel.capabilities(emptySet()).size)
+        // a unit without fresh air / frost protection / energy saving does not show those switches
+        val basic = GreeModel.capabilities(answered - "Air" - "StHt" - "SvSt").map { it.key }
+        assertFalse(GreeKeys.FRESH_AIR in basic)
+        assertFalse(GreeKeys.STEADY_HEAT in basic)
+        assertFalse(GreeKeys.ENERGY_SAVING in basic)
+        assertTrue(GreeKeys.X_FAN in basic)
     }
 
     @Test

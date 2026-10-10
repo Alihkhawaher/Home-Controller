@@ -18,6 +18,9 @@ object GreeKeys {
     const val DEFROST = "defrost"
     const val TIMER_ON = "timer_on"
     const val TIMER_OFF = "timer_off"
+    const val FRESH_AIR = "fresh_air"
+    const val STEADY_HEAT = "steady_heat"
+    const val ENERGY_SAVING = "energy_saving"
 }
 
 /**
@@ -105,6 +108,11 @@ internal object GreeModel {
         ToggleField(GreeKeys.SLEEP, "Sleep", "SwhSlp", alsoSets = listOf("SlpMod")),
         ToggleField(GreeKeys.HEALTH, "Ioniser", "Health"),
         ToggleField(GreeKeys.X_FAN, "X-Fan", "Blo"),
+        // Shown only on units that answer these columns (greeclimate's Air / StHt / SvSt; HA calls StHt "away",
+        // SvSt "eco"). StHt holds the room at 8 C in heat mode; SvSt works in cool mode.
+        ToggleField(GreeKeys.FRESH_AIR, "Fresh air", "Air"),
+        ToggleField(GreeKeys.STEADY_HEAT, "8 °C frost protection", "StHt"),
+        ToggleField(GreeKeys.ENERGY_SAVING, "Energy saving", "SvSt"),
         ToggleField(GreeKeys.CHILD_LOCK, "Child lock", "ChildLock"),
         ReadingField(Keys.FAULT, "Fault", "AllErr", diagnostic = true),
         ReadingField(Keys.FIRMWARE, "Module firmware", "hid", diagnostic = true),

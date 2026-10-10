@@ -4,6 +4,24 @@ All notable changes to Home Controller are recorded in this file. The format fol
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 0.5.0 — 2026-10-10
+
+### Added
+
+- Schedules on every device's page: "at this time, on these days, set this" (power, a mode, a temperature, an
+  alarm mode...). Each runs in the hub on the phone, so the device needs no internet; they also show in
+  Automations. "Add schedule" opens the editor ready for that device.
+- Tuya alarm host: arm (away / home), disarm and SOS from the app, with the siren, keypad, arm beep, delays and
+  "silence" -- after Home Assistant's mapping. Smoke alarm: smoke state and battery.
+- Imports carry each device's own options and ranges (a plug's power-on state as the device spells it, an alarm
+  host's delay limits); older imports fall back to built-in options.
+- Gree: fresh air, 8 °C frost protection and energy saving, on units that report them.
+
+### Fixed
+
+- A Tuya plug's "Energy" reading was a 0.1 kWh pulse the plug resets, not a total. It is now a diagnostic; energy
+  comes from the power history.
+
 ## 0.4.0 — 2026-10-10
 
 ### Added

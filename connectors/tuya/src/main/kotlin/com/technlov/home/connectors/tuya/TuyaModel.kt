@@ -73,7 +73,9 @@ internal object TuyaModel {
         CodeSpec(TuyaKeys.POWER_W, Kind.READING, "Power", unit = "W", scale = 1),
         CodeSpec(TuyaKeys.VOLTAGE, Kind.READING, "Voltage", unit = "V", scale = 1),
         CodeSpec(TuyaKeys.CURRENT, Kind.READING, "Current", unit = "mA", scale = 0),
-        CodeSpec(TuyaKeys.ENERGY, Kind.READING, "Energy", unit = "kWh", scale = 3),
+        // add_ele is NOT a running total: a plug counts to 0.1 kWh, reports it once, then resets (Tuya "report_type
+        // sum"; make-all on tinytuya #274). Kept as a diagnostic; energy comes from integrating power instead.
+        CodeSpec(TuyaKeys.ENERGY, Kind.READING, "Energy pulse (0.1 kWh steps)", unit = "kWh", scale = 3, diagnostic = true),
         // Native local timers and other controls
         CodeSpec(TuyaKeys.COUNTDOWN, Kind.NUMBER, "Countdown", unit = "s", min = 0.0, max = 86_400.0, step = 1.0, writable = true),
         CodeSpec(TuyaKeys.CHILD_LOCK, Kind.TOGGLE, "Child lock", writable = true),
@@ -89,6 +91,29 @@ internal object TuyaModel {
         CodeSpec(TuyaKeys.SWITCH_INCHING, Kind.RAW, "Inching (raw)", writable = true, diagnostic = true),
         CodeSpec(TuyaKeys.CYCLE_TIME, Kind.RAW, "Cycle timer (raw)", writable = true, diagnostic = true),
         CodeSpec(TuyaKeys.RANDOM_TIME, Kind.RAW, "Random timer (raw)", writable = true, diagnostic = true),
+        // Alarm host (category mal). Mapping after Home Assistant's tuya-device-handlers (MIT): master_mode is the arm
+        // state, master_state says whether it is sounding. Ranges come from the device (they differ by product).
+        CodeSpec(
+            "master_mode", Kind.CHOICE, "Alarm mode", writable = true,
+            options = opts("disarmed" to "Disarmed", "arm" to "Armed (away)", "home" to "Armed (home)", "sos" to "SOS"),
+        ),
+        CodeSpec("master_state", Kind.CHOICE, "Alarm state", options = opts("normal" to "Normal", "alarm" to "Sounding")),
+        CodeSpec("delay_set", Kind.NUMBER, "Arming delay", unit = "s", min = 0.0, max = 300.0, writable = true),
+        CodeSpec("alarm_delay_time", Kind.NUMBER, "Alarm delay", unit = "s", min = 0.0, max = 300.0, writable = true),
+        CodeSpec("alarm_time", Kind.NUMBER, "Siren duration", unit = "min", min = 0.0, max = 60.0, writable = true),
+        CodeSpec("switch_alarm_sound", Kind.TOGGLE, "Arm beep", writable = true),
+        CodeSpec("switch_alarm_light", Kind.TOGGLE, "Siren light", writable = true),
+        CodeSpec("switch_kb_sound", Kind.TOGGLE, "Keypad sound", writable = true),
+        CodeSpec("switch_kb_light", Kind.TOGGLE, "Keypad light", writable = true),
+        CodeSpec("switch_alarm_propel", Kind.TOGGLE, "Alarm notifications", writable = true),
+        CodeSpec("muffling", Kind.TOGGLE, "Silence the alarm", writable = true),
+        CodeSpec("alarm_msg", Kind.RAW, "Last alarm message", diagnostic = true),
+        CodeSpec("sub_class", Kind.READING, "Sensor class", diagnostic = true),
+        CodeSpec("sub_state", Kind.READING, "Sensor state", diagnostic = true),
+        CodeSpec("sub_admin", Kind.RAW, "Sensors", diagnostic = true),
+        // Smoke alarm (category ywbj)
+        CodeSpec("smoke_sensor_status", Kind.CHOICE, "Smoke", options = opts("normal" to "Clear", "alarm" to "SMOKE")),
+        CodeSpec("battery_percentage", Kind.READING, "Battery", unit = "%"),
         // Diagnostics / calibration (read-only)
         CodeSpec(TuyaKeys.FAULT, Kind.READING, "Fault", capabilityKey = Keys.FAULT, diagnostic = true),
         CodeSpec("test_bit", Kind.READING, "Self-test", diagnostic = true),
@@ -200,12 +225,24 @@ internal object TuyaModel {
             val scale = row.opt(3)?.toString()?.toIntOrNull() ?: 0
             val unit = row.optString(4, "")
             val writable = row.optBoolean(5, false)
-            out[id] = specFromImport(code, type, scale, unit, writable)
+            out[id] = specFromImport(code, type, scale, unit, writable, row.optJSONObject(6))
         }
         return out
     }
 
-    private fun specFromImport(code: String, type: String, scale: Int, unit: String, writable: Boolean): CodeSpec {
+    /**
+     * [extra] is the optional 7th element of an import row: {"options": [[device value, label], ...]} for a choice,
+     * {"min", "max", "step"} (display units) for a number. It carries what THIS device accepts (an alarm host's arm
+     * modes; a plug's "memory" where the cloud says "last"), so it wins over the built-in defaults.
+     */
+    private fun specFromImport(
+        code: String,
+        type: String,
+        scale: Int,
+        unit: String,
+        writable: Boolean,
+        extra: org.json.JSONObject? = null,
+    ): CodeSpec {
         val base = CODES[code]
         val kind = base?.kind ?: when (type.trim().lowercase()) {
             "bool" -> if (code == "switch_1") Kind.POWER else Kind.TOGGLE
@@ -214,7 +251,16 @@ internal object TuyaModel {
             "str", "raw" -> Kind.RAW
             else -> Kind.READING
         }
-        val max = if (base?.max != null && base.max > 0.0) base.max else if (code == TuyaKeys.COUNTDOWN) 86_400.0 else 1e9
+        val defaultMax = if (base?.max != null && base.max > 0.0) base.max else if (code == TuyaKeys.COUNTDOWN) 86_400.0 else 1e9
+        val imported = extra?.optJSONArray("options")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val pair = arr.optJSONArray(i) ?: return@mapNotNull null
+                val value = pair.optString(0).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                // keep a built-in label for a value we know; otherwise the label the PC sent
+                val label = base?.options?.firstOrNull { it.value == value }?.label ?: pair.optString(1, value)
+                Capability.Option(value, label)
+            }
+        }.orEmpty()
         return CodeSpec(
             code = code,
             kind = kind,
@@ -222,14 +268,18 @@ internal object TuyaModel {
             capabilityKey = base?.capabilityKey ?: if (code == "switch_1") Keys.POWER else code,
             unit = unit.ifEmpty { base?.unit ?: "" },
             scale = scale,
-            min = base?.min ?: 0.0,
-            max = max,
-            step = base?.step ?: 1.0,
+            min = extra.num("min") ?: base?.min ?: 0.0,
+            max = extra.num("max") ?: defaultMax,
+            step = extra.num("step")?.takeIf { it > 0.0 } ?: base?.step ?: 1.0,
             writable = writable,
             diagnostic = base?.diagnostic ?: false,
-            options = if (kind == Kind.CHOICE) base?.options ?: emptyList() else emptyList(),
+            options = if (kind == Kind.CHOICE) imported.ifEmpty { base?.options ?: emptyList() } else emptyList(),
         )
     }
+
+    /** A number from an import row's extras -- only optDouble/has/isNull, which Android's built-in org.json has. */
+    private fun org.json.JSONObject?.num(key: String): Double? =
+        if (this == null || !has(key) || isNull(key)) null else optDouble(key).takeIf { !it.isNaN() }
 
     /** Parses a `dp id -> code` override carried as JSON on the device (e.g. `{"1":"switch_1","18":"cur_current"}`). */
     fun parseDpMapOverride(json: String?): Map<Int, String> {
