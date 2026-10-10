@@ -43,9 +43,11 @@ unplugged.
   vendor servers.
 - **Your phone is the hub.** An optional foreground service polls your devices and runs automations while the app is
   closed.
-- **Automations.** Trigger on a time of day (on chosen weekdays) or on a device state ("room above 28 °C"), add
-  conditions (another device's state, a time window that may cross midnight), then change devices or send yourself
-  a notification.
+- **Automations.** Trigger on a time of day, at sunrise or sunset with an offset ("sunset − 15 min"), on chosen
+  weekdays (with Every day / Workdays / Weekend shortcuts that follow your region's weekend), or on a device state
+  ("room above 28 °C"); add conditions (another device's state, a time window that may cross midnight), then change
+  devices or send yourself a notification. An automation can run once and turn itself off. A time the phone missed
+  while asleep or restarting still runs if the hub is back within 10 minutes, and never twice.
 - **One app for every brand.** Device families are plugins, called connectors. The app draws each device's controls
   from what the device declares it can do, so a new brand needs a connector and nothing else.
 - **Rooms.** Group devices by room, rename them, hide the ones you never touch.
@@ -213,6 +215,9 @@ Screenshots come with the first release. They will live in [`docs/screenshots/`]
   permission for any network socket "Internet"; Home Controller uses it for local connections.
 - **Your data stays on your phone.** Devices, rooms and automations are stored in the app's private storage.
   Device keys that a device hands out on the LAN are never logged.
+- **Location only if you ask.** Sunrise and sunset are worked out on the phone from your home's location. You type
+  it, or tap "Use this phone's location": the app then asks for approximate location and reads it once. It is
+  rounded to about a kilometre, kept on the phone, and never logged or tracked.
 
 Note that many local device protocols, Gree's included, have no authentication: anyone on your Wi-Fi can control
 those devices with or without this app. Keep your Wi-Fi password strong and put guests on a guest network. See
@@ -234,6 +239,8 @@ please follow the [code of conduct](CODE_OF_CONDUCT.md). Report security issues 
   (OWON PC321-TY) and real Tuya-app captures of the native timer formats.
 - The connector and capability model follows the idea of [Home Assistant](https://www.home-assistant.io/)'s
   integrations and entities, moved onto the phone.
+- [commons-suncalc](https://github.com/shred/commons-suncalc) by Richard Körber (Apache-2.0) computes sunrise and
+  sunset on the phone.
 
 Gree, Tuya and other brand names are trademarks of their owners. Home Controller is an independent project and is not
 affiliated with or endorsed by any device maker.

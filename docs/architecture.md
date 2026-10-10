@@ -160,21 +160,38 @@ data class Automation(
     val trigger: Trigger,
     val conditions: List<Condition> = emptyList(),
     val actions: List<Action>,
+    val runOnce: Boolean = false,
 )
 ```
 
 | Part | Kinds |
 |---|---|
-| Trigger | `TimeOfDay(hour, minute, days)`: at a time, on chosen weekdays (none means every day). `StateMatches(device, key, op, value)`: when a device value comes to match, such as room temperature `GE 30`. |
+| Trigger | `TimeOfDay(hour, minute, days)`: at a time, on chosen weekdays (none means every day). `Sun(event, offsetMinutes, days)`: at sunrise or sunset, moved by up to three hours either way ("sunset − 15 min"), on chosen weekdays. `StateMatches(device, key, op, value)`: when a device value comes to match, such as room temperature `GE 30`. |
 | Condition | `StateCompare(device, key, op, value)`: a device value must match now. `TimeBetween(from, to)`: the time is inside a window. |
 | Action | `SetValues(device, changes)`: change a device. `Notify(title, text)`: show a notification. |
 
 The operators are `EQ`, `NE`, `GT`, `GE`, `LT` and `LE`.
 
+The engine is called once a minute as `due(now, automations, states, previousStates, lastRun, previousCheck, sun)`.
+`lastRun` is when each automation last ran; the app saves it with the automations, so it outlives a restart.
+`previousCheck` is when the hub last asked (null right after a start). `sun` is a `SunClock`: the home's sunrise and
+sunset in the phone's local time, worked out on the phone by `SolarClock` with
+[commons-suncalc](https://github.com/shred/commons-suncalc) from the location the user set (none set: sun triggers
+do not fire).
+
 The rules:
 
 - An automation is due when it is enabled, its trigger fires, and every condition holds.
-- A time trigger fires during its minute, once: not again if the automation already ran in that minute.
+- A time trigger fires once for each time it is set for: during that minute, or, when the hub missed it (Android
+  dozed, or the app was restarted), late, up to 10 minutes after it. Missed means the time passed after the previous
+  check and the saved last run is older than it. A time the hub checked on time is never retried, even if a
+  condition did not hold then. Right after a start, a late run also needs a saved last run, so a time that may have
+  run before an app update is not run again. It never runs twice for the same time.
+- A sun trigger follows the same rules at the sunrise or sunset plus its offset; its days are the days of the
+  sunrise or sunset, so "sunset + 2 h" past midnight belongs to its evening. Where the sun does not rise or set that
+  day, it does not fire.
+- A run-once automation is turned off by the hub after a run in which every device took its change; after a failed
+  run it stays on and tries again next time.
 - A state trigger fires on the edge only: the comparison is true now and was not true in the previous state. It does
   not fire again on every poll while the value stays the same.
 - A time window is inclusive at the start and exclusive at the end, may cross midnight (22:00 to 06:00), and a window
@@ -217,7 +234,7 @@ sequenceDiagram
     Dev-->>Conn: confirmed
     Conn-->>Hub: DeviceState
     loop every minute
-        Hub->>Engine: due(now, automations, states, previousStates, lastRun)
+        Hub->>Engine: due(now, automations, states, previousStates, lastRun, previousCheck, sun)
         Engine-->>Hub: automations to run
         Hub->>Conn: apply(changes) for each SetValues action
     end
@@ -236,8 +253,10 @@ sequenceDiagram
 ## Storage
 
 Devices, rooms, automations and settings are stored on the phone in the app's private storage. A saved device keeps
-its last reported capabilities, so its controls and the automation editor work while it is offline. Nothing is
-synchronised to a server.
+its last reported capabilities, so its controls and the automation editor work while it is offline. When each
+automation last ran is stored too, written before its actions run, so a restart never runs a time twice. The home's
+location for sunrise and sunset, if the user set it, is stored rounded to about a kilometre and never logged.
+Nothing is synchronised to a server.
 
 ## Security model
 
