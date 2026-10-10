@@ -41,8 +41,8 @@ unplugged.
 
 - **Local control, no cloud.** Devices are found and controlled on your Wi-Fi only. No account, no sign-in, no
   vendor servers.
-- **Your phone is the hub.** An optional foreground service polls your devices and runs automations while the app is
-  closed.
+- **Your phone is the hub.** An optional foreground service polls your devices, hears the ones that report changes
+  on their own (Tuya), and runs automations while the app is closed.
 - **Automations.** Trigger on a time of day (on chosen weekdays) or on a device state ("room above 28 °C"), add
   conditions (another device's state, a time window that may cross midnight), then change devices or send yourself
   a notification.
@@ -168,6 +168,7 @@ interface DeviceSession : AutoCloseable {
     val capabilities: List<Capability>
     suspend fun read(): DeviceState                        // reads only
     suspend fun apply(changes: List<SetValue>): DeviceState // the only call that changes a device
+    fun updates(): Flow<DeviceState>? = null                // optional: what the device pushes on its own
 }
 ```
 

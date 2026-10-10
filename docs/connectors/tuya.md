@@ -78,9 +78,51 @@ Before any status or command, 3.4/3.5 negotiate a per-connection key:
 |---|---|---|
 | Read status | DP_QUERY `0x0a`, payload `{"gwId","devId","uid","t"}` | DP_QUERY_NEW `0x10`, payload `{}` |
 | Set values | CONTROL `0x07`, payload `{"devId","uid","t","dps":{…}}` | CONTROL_NEW `0x0d`, payload `{"protocol":5,"t":…,"data":{"dps":{…}}}` |
+| Keep the connection open | HEART_BEAT `0x09`, payload `{"gwId","devId"}` | the same |
+| Re-measure readings | UPDATEDPS `0x12`, payload `{"dpId":[18,19,20]}` | the same |
 
 The device answers status as `{"dps":{"1":true,"19":1033,…}}` (3.4/3.5 may wrap it as `{"data":{"dps":…}}`; both are
-read).
+read). HEART_BEAT and UPDATEDPS carry no version header in any version; their frames are checked byte for byte
+against tinytuya's in the tests.
+
+## The live connection
+
+A session keeps **one** TCP connection open to its device for as long as it lives. Many Tuya devices accept a single
+local connection, so the connector never opens a second one while one is open: a reconnect closes the old socket
+first, and a session closes its socket when it is closed.
+
+A background reader takes every frame the device sends:
+
+- **Replies.** The answer to the request in flight is matched by command, and below 3.5 also by sequence number,
+  which those devices echo (3.5 devices number their frames on their own) — tinytuya's rule. Many devices first send
+  an empty acknowledgement (a "null ack") and then the data; that is waited out.
+- **Pushes.** A STATUS frame (`0x08`) is the device reporting a change on its own: a button pressed, a change made in
+  another app, an alarm going off, or the change a command just made. It is never taken for a reply. The session
+  hands it to the hub at once, as a whole state, through `DeviceSession.updates()`.
+- **Heartbeats.** A HEART_BEAT goes out whenever the connection has been idle for 10 s (devices drop an idle socket;
+  tinytuya's monitor uses 12 s, tuya-local 5 s). Its answer only proves the connection is alive.
+
+Data points from every frame are merged in the order they arrive, so a reply that a push overtook never rolls the
+state back.
+
+When the connection drops (the device rebooted, Wi-Fi blinked) or goes silent (nothing heard for 30 s, heartbeats
+included), it is reopened after 1 s, then 2, 4 … up to 60 s, and the status is read again (pushes sent meanwhile are
+lost). The delay starts again from 1 s only after a connection has held for a minute, so a device that hangs up after
+every answer is not hammered. A poll reconnects at once if it finds the connection down.
+
+### Refreshing readings (UPDATEDPS)
+
+Metering plugs and meters only re-measure some readings when asked. For a device that reports them, every other
+read sends UPDATEDPS instead of the status query, alternating the two as tuya-local does; the device acknowledges and
+pushes the fresh values. The dps refreshed:
+
+| Device | dps | Source |
+|---|---|---|
+| Metering plug (`cz`): `cur_current`, `cur_power`, `cur_voltage` | 18, 19, 20 | tinytuya's default UPDATEDPS request |
+| OWON PC321-TY: per-phase voltage, current, power; current and power totals | 101-103, 111-113, 121-123, 132, 133 | tuya-local's `pc321ty_energy_meter.yaml` (`force: true`) |
+
+They are chosen by code, so an imported spec that names them the same way gets them too. A device that leaves
+UPDATEDPS unanswered three times is read by status query alone from then on.
 
 ## Data points and the complete device view
 
@@ -181,7 +223,9 @@ the app's encrypted storage and never logged (the log says only "imported N devi
   decrypted with the one published UDP key `md5("yGAdlopoPVldABfn")`. A broadcast gives a device's id, IP and
   protocol version — never its key.
 - **Opening** connects over TCP, negotiates the session key on 3.4/3.5, then reads the status once to learn which
-  dps the device has and declare their capabilities.
+  dps the device has and declare their capabilities. The connection then stays open (see
+  [The live connection](#the-live-connection)).
+- **Pushes** reach the hub within a second of the device sending them; the hub keeps polling as the fallback.
 - **Reads** never change the device. A device that stops answering reads as offline with its last known values; the
   connection is reopened once (renegotiating the session key) before a read is given up on.
 - **Commands** are validated before anything is sent: an unknown key, a read-only one or a value out of range is
@@ -194,6 +238,9 @@ the app's encrypted storage and never logged (the log says only "imported N devi
   switches to the CONTROL_NEW query form, exactly as tinytuya does.
 - **Scale.** The local protocol carries raw integers; the ÷10/÷100/÷1000 scaling is device metadata. The built-in
   defaults are the common values; an import carries the exact per-dp scale.
+- **Odd answers.** If a device never answers a status query with the query's own command but sends its data in a
+  STATUS frame instead, that data is taken (once, after the usual wait) and STATUS frames answer its queries from then
+  on; the log says so. A device that ignores UPDATEDPS is read by status query alone.
 
 ## Security
 
@@ -203,9 +250,12 @@ control the device. Keep your Wi-Fi password strong and your keys private. See [
 ## Credits
 
 - [tinytuya](https://github.com/jasonacox/tinytuya) (Jason Cox and contributors) documented the Tuya LAN protocol —
-  the framing, ciphers, session-key negotiation and command set here are ported from it.
+  the framing, ciphers, session-key negotiation and command set here are ported from it, as are the HEART_BEAT and
+  UPDATEDPS requests and the rule for matching a reply to its request.
 - [make-all / tuya-local](https://github.com/make-all/tuya-local) device configs supplied the OWON PC321-TY meter dp
-  map (`pc321ty_energy_meter.yaml`) and the native-timer record formats (`wifi_m604_quad_switch.yaml`).
+  map and the dps it refreshes (`pc321ty_energy_meter.yaml`) and the native-timer record formats
+  (`wifi_m604_quad_switch.yaml`); its persistent-connection loop is the model for alternating UPDATEDPS with the
+  status query.
 
 Tuya and other brand names are trademarks of their owners. Home Controller is an independent project and is not
 affiliated with or endorsed by any device maker.

@@ -27,7 +27,11 @@ interface TuyaTransport {
     suspend fun openDiscoverySocket(ports: List<Int>): TuyaDiscoverySocket
 }
 
-/** One open TCP connection to a device. Calls are serialised by [TuyaSession]; not thread-safe on its own. */
+/**
+ * One open TCP connection to a device. [TuyaClient] runs one reader ([receive]) and serialises its writes ([send]);
+ * the two may run at the same time. [close] may be called from any thread and must make a pending [receive] end
+ * (with an [IOException]) promptly.
+ */
 interface TuyaConnection : AutoCloseable {
     suspend fun send(frame: ByteArray)
 
@@ -47,16 +51,20 @@ interface TuyaDiscoverySocket : AutoCloseable {
 
 /** The real transport: a TCP socket per device and UDP listeners for discovery, all blocking on Dispatchers.IO. */
 class TcpTuyaTransport : TuyaTransport {
-    override suspend fun connect(host: String, port: Int, timeoutMs: Long): TuyaConnection = withContext(Dispatchers.IO) {
+    override suspend fun connect(host: String, port: Int, timeoutMs: Long): TuyaConnection {
         val socket = Socket()
-        socket.tcpNoDelay = true
         try {
-            socket.connect(InetSocketAddress(host, port), timeoutMs.toInt().coerceAtLeast(1))
-        } catch (e: IOException) {
+            withContext(Dispatchers.IO) {
+                socket.tcpNoDelay = true
+                socket.connect(InetSocketAddress(host, port), timeoutMs.toInt().coerceAtLeast(1))
+            }
+            return TcpTuyaConnection(socket)
+        } catch (e: Throwable) {
+            // Includes a cancellation that lands just after the connect succeeded (withContext then drops the
+            // result): close the socket, or the device keeps a stray connection open and may refuse the next one.
             runCatching { socket.close() }
             throw e
         }
-        TcpTuyaConnection(socket)
     }
 
     override suspend fun openDiscoverySocket(ports: List<Int>): TuyaDiscoverySocket =
