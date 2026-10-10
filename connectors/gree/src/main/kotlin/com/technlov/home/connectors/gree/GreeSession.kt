@@ -5,7 +5,11 @@ import com.technlov.home.core.ConnectorException
 import com.technlov.home.core.DeviceRef
 import com.technlov.home.core.DeviceSession
 import com.technlov.home.core.DeviceState
+import com.technlov.home.core.EventLog
 import com.technlov.home.core.SetValue
+import com.technlov.home.core.info
+import com.technlov.home.core.warn
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -20,6 +24,7 @@ class GreeSession internal constructor(
     device: DeviceRef,
     private val client: GreeClient,
     private val config: GreeConfig,
+    private val log: EventLog = EventLog.None,
 ) : DeviceSession {
     override var device: DeviceRef = device
         private set
@@ -31,6 +36,9 @@ class GreeSession internal constructor(
     private var raw: Map<String, Any?> = emptyMap()
     private var diag: Map<String, Any?> = emptyMap()
     private var diagAt: Long? = null
+    private var online = true
+
+    private val who get() = "${device.name} (${device.address})"
 
     /** First read: learns which columns the unit answers and declares only those capabilities. */
     internal suspend fun prepare() = lock.withLock {
@@ -48,14 +56,22 @@ class GreeSession internal constructor(
         val columns = try {
             GreeModel.encode(changes)
         } catch (e: IllegalArgumentException) {
+            log.warn(GreeClient.SOURCE, "$who: change refused before sending: ${e.message}")
             throw ConnectorException("${device.name}: ${e.message}", e)
         }
         if (columns.isEmpty()) return@withLock readLocked()
+        val sent = columns.entries.joinToString { "${it.key}=${it.value}" }
+        log.info(GreeClient.SOURCE, "$who: command sent: $sent")
         val confirmed = try {
             client.command(columns)
         } catch (e: GreeProtocolException) {
+            log.warn(GreeClient.SOURCE, "$who: command refused: ${e.message}")
             throw ConnectorException("${device.name}: ${e.message}", e)
+        } catch (e: ConnectorException) {
+            log.warn(GreeClient.SOURCE, "$who: command not confirmed: ${e.message}")
+            throw e
         }
+        log.info(GreeClient.SOURCE, "$who: command confirmed: ${confirmed.entries.joinToString { "${it.key}=${it.value}" }}")
         raw = raw + confirmed
         readLocked()
     }
@@ -66,9 +82,14 @@ class GreeSession internal constructor(
             val now = config.clock()
             val last = diagAt
             if (last == null || now - last >= config.diagnosticsEveryMs) readDiagnostics()
+            if (!online) log.info(GreeClient.SOURCE, "$who: answering again")
+            online = true
             DeviceState(GreeModel.decode(raw + diag), online = true, updatedAtMillis = now)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (online) log.warn(GreeClient.SOURCE, "$who: went silent: ${e.message}")
+            online = false
             DeviceState(GreeModel.decode(raw + diag), online = false, updatedAtMillis = config.clock(), error = e.message)
         }
     }
@@ -78,8 +99,10 @@ class GreeSession internal constructor(
         diagAt = config.clock()
         try {
             diag = client.status(GreeModel.DIAGNOSTIC_COLUMNS, attempts = config.diagnosticsTries)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            log.warn(GreeClient.SOURCE, "$who: diagnostics not answered: ${e.message}")
         }
     }
 
@@ -87,6 +110,7 @@ class GreeSession internal constructor(
     private suspend fun statusWithRebind(columns: List<String>): Map<String, Any?> = try {
         client.status(columns)
     } catch (e: GreeProtocolException) {
+        log.warn(GreeClient.SOURCE, "$who: ${e.message}; binding again")
         try {
             client.bind()
             client.status(columns)

@@ -62,10 +62,34 @@ class UdpGreeTransportTest {
     }
 
     @Test
-    fun collectGathersReplies() = runBlocking {
-        val replies = UdpGreeTransport().collect(listOf("127.0.0.1"), server.localPort, """{"t":"scan"}""".toByteArray(), 500, rounds = 2)
+    fun scanSocketGathersRepliesInTheBackground() = runBlocking {
+        val replies = mutableListOf<GreeDatagram>()
+        UdpGreeTransport().openScanSocket().use { s ->
+            s.send(listOf("127.0.0.1", "127.0.0.1"), server.localPort, """{"t":"scan"}""".toByteArray())
+            val deadline = System.currentTimeMillis() + 2_000
+            while (replies.size < 2 && System.currentTimeMillis() < deadline) {
+                replies += s.drain()
+                kotlinx.coroutines.delay(20)
+            }
+            assertTrue(s.drain().isEmpty())
+        }
         assertEquals(2, replies.size)
         assertTrue(replies.all { it.host == "127.0.0.1" })
+    }
+
+    @Test
+    fun scanSocketSurvivesAnUnresolvableAddress() = runBlocking {
+        UdpGreeTransport().openScanSocket().use { s ->
+            // A bad name must not stop the rest of the burst.
+            s.send(listOf("no-such-host.invalid", "127.0.0.1"), server.localPort, """{"t":"scan"}""".toByteArray())
+            val deadline = System.currentTimeMillis() + 2_000
+            var got = emptyList<GreeDatagram>()
+            while (got.isEmpty() && System.currentTimeMillis() < deadline) {
+                got = s.drain()
+                kotlinx.coroutines.delay(20)
+            }
+            assertEquals(1, got.size)
+        }
     }
 
     @Test

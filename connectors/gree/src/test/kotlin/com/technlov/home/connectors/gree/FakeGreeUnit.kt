@@ -113,35 +113,67 @@ class FakeGreeUnit(
     }
 }
 
-/** A LAN of fake units behind the [GreeTransport] interface. Records what was sent where. */
-class FakeLan(vararg units: FakeGreeUnit) : GreeTransport {
+/** One scan sent during discovery: when (by the test clock) and to which address. */
+data class SentScan(val at: Long, val host: String)
+
+/**
+ * A LAN of fake units behind the [GreeTransport] interface. Records what was sent where and when ([clock] is the
+ * test's virtual time). Broadcasts reach every unit unless [broadcastLost]; [unicastLoss] can drop chosen sends.
+ */
+class FakeLan(vararg units: FakeGreeUnit, private val clock: () -> Long = { 0L }) : GreeTransport {
     val units = units.associateBy { it.host }.toMutableMap()
     var exchanges = 0
-    val collectTargets = mutableListOf<List<String>>()
+
+    /** Wi-Fi broadcast frames are not acknowledged: when true, no unit hears a broadcast scan. */
+    var broadcastLost = false
+
+    /** Every scan sent through a scan socket, in order. */
+    val sent = mutableListOf<SentScan>()
+
+    /** Burst sizes, in order (one entry per send() call on a scan socket). */
+    val bursts = mutableListOf<Int>()
 
     /** Extra datagrams that show up during discovery (noise from other devices). */
     val noise = mutableListOf<GreeDatagram>()
+
+    var socketsOpened = 0
+    var socketsClosed = 0
 
     override suspend fun exchange(host: String, port: Int, payload: ByteArray, timeoutMs: Long): ByteArray? {
         exchanges++
         return units[host]?.handle(payload)
     }
 
-    override suspend fun collect(
-        targets: List<String>,
-        port: Int,
-        payload: ByteArray,
-        timeoutMs: Long,
-        rounds: Int,
-    ): List<GreeDatagram> {
-        collectTargets += targets
-        val out = mutableListOf<GreeDatagram>()
-        repeat(rounds) {
-            for (t in targets) {
-                val hit = if (t.endsWith(".255")) units.values.toList() else listOfNotNull(units[t])
-                for (u in hit) u.handle(payload)?.let { out += GreeDatagram(u.host, it) }
+    override suspend fun openScanSocket(): GreeScanSocket {
+        socketsOpened++
+        val inbox = ArrayDeque<GreeDatagram>(noise)
+        return object : GreeScanSocket {
+            override suspend fun send(hosts: List<String>, port: Int, payload: ByteArray) {
+                bursts += hosts.size
+                for (h in hosts) {
+                    sent += SentScan(clock(), h)
+                    val hit = when {
+                        h.endsWith(".255") -> if (broadcastLost) emptyList() else units.values.toList()
+                        else -> listOfNotNull(units[h])
+                    }
+                    for (u in hit) u.handle(payload)?.let { inbox += GreeDatagram(u.host, it) }
+                }
+            }
+
+            override fun drain(): List<GreeDatagram> = inbox.toList().also { inbox.clear() }
+
+            override fun close() {
+                socketsClosed++
             }
         }
-        return out + noise
     }
+}
+
+/** An [com.technlov.home.core.EventLog] that keeps every line, verbose on, for leak checks. */
+class RecordingLog(override val verbose: Boolean = true) : com.technlov.home.core.EventLog {
+    val lines = mutableListOf<String>()
+    override fun log(level: com.technlov.home.core.EventLog.Level, source: String, message: String, error: Throwable?) {
+        lines += "$level $source $message" + (error?.let { " | ${it.javaClass.simpleName}: ${it.message}" } ?: "")
+    }
+    val text get() = lines.joinToString("\n")
 }

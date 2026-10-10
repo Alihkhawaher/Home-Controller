@@ -303,45 +303,60 @@ class GreeConnectorTest {
         }
     }
 
-    // ---- discovery ----
+    // ---- logging ----
 
     @Test
-    fun discoveryTargetsBroadcastKnownHostsAndSweep() {
-        val gree = GreeConnector(FakeLan())
-        val targets = gree.discoveryTargets(LocalNetwork("192.0.2.255", "192.0.2", listOf("192.0.2.10", "198.51.100.7")))
-        assertEquals("192.0.2.255", targets[0])
-        assertEquals("192.0.2.10", targets[1])
-        assertEquals("198.51.100.7", targets[2])
-        assertEquals(targets.size, targets.toSet().size)
-        assertEquals(3 + 253, targets.size)           // .10 is already listed
-        assertTrue("192.0.2.1" in targets && "192.0.2.254" in targets)
-        assertFalse("192.0.2.0" in targets)
+    fun logRecordsTheStoryButNeverTheKey() = runTest {
+        val unit = FakeGreeUnit()
+        val log = RecordingLog(verbose = true)
+        val gree = GreeConnector(FakeLan(unit), GreeConfig(sweep = false), log)
+        val session = gree.open(gree.discover(net, 500).single())
+        session.read()
+        session.apply(listOf(SetValue(Keys.POWER, Value.Bool(true)), SetValue(Keys.TARGET_TEMPERATURE, Value.Num(24.0))))
+        unit.dropNext = 4
+        assertFalse(session.read().online)
+        assertTrue(session.read().online)
+        unit.rekey("NewKey0123456789")
+        assertTrue(session.read().online)
 
-        val noSweep = GreeConnector(FakeLan(), GreeConfig(sweep = false))
-        assertEquals(listOf("192.0.2.255", "192.0.2.10"), noSweep.discoveryTargets(LocalNetwork("192.0.2.255", "192.0.2.", listOf("192.0.2.10"))))
-        assertEquals(listOf("192.0.2.255"), GreeConnector(FakeLan()).discoveryTargets(LocalNetwork("192.0.2.255", "not-a-prefix")))
+        val text = log.text
+        assertFalse("unit key leaked", text.contains("Fake0Key1Test2Ab"))
+        assertFalse("new unit key leaked", text.contains("NewKey0123456789"))
+        assertTrue(text.contains("\"key\":\"<key>\""))                        // the verbose bindok frame, redacted
+        assertTrue(text.contains("discovery: 1 unit(s)"))
+        assertTrue(text.contains("bound (cipher v1, key received)"))
+        assertTrue(text.contains("opened (cipher v1"))
+        assertTrue(text.contains("command sent: Pow=1, SetTem=24, TemUn=0, TemRec=0"))
+        assertTrue(text.contains("command confirmed: Pow=1, SetTem=24, TemUn=0, TemRec=0"))
+        assertTrue(text.contains("WARN gree Gree AC 0001 (192.0.2.10): went silent"))
+        assertTrue(text.contains("INFO gree Gree AC 0001 (192.0.2.10): answering again"))
+        assertTrue(text.contains("binding again"))
+        assertTrue(text.contains("<- 192.0.2.10 {\"t\":\"dat\""))                // decrypted frames in verbose mode
+        assertTrue(text.contains("-> 192.0.2.10 {\"t\":\"cmd\",\"opt\":[\"Pow\""))
     }
 
     @Test
-    fun discoveryDeduplicatesByMac() = runTest {
-        val a = FakeGreeUnit(host = "192.0.2.10", mac = "f0fe6b000001")
-        val b = FakeGreeUnit(host = "192.0.2.11", mac = "F0:FE:6B:00:00:02", name = "Office", cipher = 2)
-        val lan = FakeLan(a, b)
-        lan.noise += GreeDatagram("192.0.2.50", "not json".toByteArray())
-        lan.noise += GreeDatagram("192.0.2.51", """{"t":"pack","pack":"AAAA"}""".toByteArray())
-        val gree = GreeConnector(lan, GreeConfig(discoveryRounds = 2))
-        // Broadcast + known host + sweep, two rounds: each unit answers up to 6 times.
-        val found = gree.discover(LocalNetwork("192.0.2.255", "192.0.2.", listOf("192.0.2.10")), 1_000)
-        assertEquals(listOf("f0fe6b000001", "f0fe6b000002"), found.map { it.id })
-        assertEquals("Office", found[1].name)
-        assertEquals("2", found[1].extras[GreeConnector.EXTRA_CIPHER])
-        assertEquals("F0:FE:6B:00:00:02", found[1].extras[GreeConnector.EXTRA_MAC])
-        assertEquals("192.0.2.11", found[1].address)
+    fun quietLogHasNoFrames() = runTest {
+        val log = RecordingLog(verbose = false)
+        val gree = GreeConnector(FakeLan(FakeGreeUnit()), GreeConfig(sweep = false), log)
+        gree.open(gree.discover(net, 500).single()).read()
+        assertFalse(log.text.contains("->"))
+        assertFalse(log.text.contains("<-"))
+        assertFalse(log.text.contains("DEBUG"))
+        assertTrue(log.text.contains("opened"))
     }
 
     @Test
-    fun discoveryWithNothingToAsk() = runTest {
-        val gree = GreeConnector(FakeLan(FakeGreeUnit()), GreeConfig(sweep = false))
-        assertTrue(gree.discover(LocalNetwork("", ""), 500).isEmpty())
+    fun failuresAreLoggedAsWarnings() = runTest {
+        val log = RecordingLog()
+        val lan = FakeLan(FakeGreeUnit())
+        val gree = GreeConnector(lan, GreeConfig(sweep = false), log)
+        val ref = gree.discover(net, 500).single()
+        val session = gree.open(ref)
+        expect<ConnectorException> { session.apply(listOf(SetValue(Keys.TARGET_TEMPERATURE, Value.Num(40.0)))) }
+        lan.units.clear()
+        expect<ConnectorException> { gree.open(ref) }
+        assertTrue(log.text, log.text.contains("WARN gree Gree AC 0001 (192.0.2.10): change refused before sending"))
+        assertTrue(log.text, log.text.contains("WARN gree Gree AC 0001 (192.0.2.10): open failed: no answer"))
     }
 }

@@ -2,31 +2,43 @@ package com.technlov.home.connectors.gree
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /** One datagram that arrived, and the host (IP text) it came from. */
 class GreeDatagram(val host: String, val data: ByteArray)
 
 /**
  * How the connector talks UDP. Injectable so tests can put a fake unit behind it; the app uses [UdpGreeTransport].
- * Retries are not done here: [GreeClient] re-sends on silence.
+ * Retries and pacing are not done here: [GreeClient] re-sends on silence and [GreeConnector.discover] plans the
+ * discovery passes.
  */
 interface GreeTransport {
     /** Send [payload] to host:port and wait up to [timeoutMs] for one reply from that host. Null on silence. */
     suspend fun exchange(host: String, port: Int, payload: ByteArray, timeoutMs: Long): ByteArray?
 
-    /**
-     * Discovery: send [payload] to every target (broadcast addresses allowed) from one socket, [rounds] times spread
-     * over the first half of the window, and return every datagram that arrives within [timeoutMs].
-     */
-    suspend fun collect(targets: List<String>, port: Int, payload: ByteArray, timeoutMs: Long, rounds: Int = 1): List<GreeDatagram>
+    /** A socket for discovery: broadcast allowed, replies gathered in the background until it is closed. */
+    suspend fun openScanSocket(): GreeScanSocket
 }
 
-/** The real transport: java.net.DatagramSocket on Dispatchers.IO. */
+/** The discovery socket: send scans in batches, pick up whatever answered in between. */
+interface GreeScanSocket : AutoCloseable {
+    /** Send [payload] to each of [hosts] (broadcast addresses allowed). One unreachable address does not stop the rest. */
+    suspend fun send(hosts: List<String>, port: Int, payload: ByteArray)
+
+    /** The replies that arrived since the last call. */
+    fun drain(): List<GreeDatagram>
+
+    override fun close()
+}
+
+/** The real transport: java.net.DatagramSocket, blocking calls on Dispatchers.IO. */
 class UdpGreeTransport : GreeTransport {
     override suspend fun exchange(host: String, port: Int, payload: ByteArray, timeoutMs: Long): ByteArray? =
         withContext(Dispatchers.IO) {
@@ -54,51 +66,55 @@ class UdpGreeTransport : GreeTransport {
         }
     }
 
-    override suspend fun collect(
-        targets: List<String>,
-        port: Int,
-        payload: ByteArray,
-        timeoutMs: Long,
-        rounds: Int,
-    ): List<GreeDatagram> = withContext(Dispatchers.IO) {
-        val out = ArrayList<GreeDatagram>()
-        val addresses = targets.distinct().mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
-        DatagramSocket().use { s ->
-            s.broadcast = true
-            val start = System.currentTimeMillis()
-            val deadline = start + timeoutMs
-            val n = rounds.coerceAtLeast(1)
-            val gap = if (n > 1) timeoutMs / 2 / (n - 1) else 0L
-            var sent = 0
+    override suspend fun openScanSocket(): GreeScanSocket = withContext(Dispatchers.IO) { UdpScanSocket() }
+
+    private class UdpScanSocket : GreeScanSocket {
+        private val socket = DatagramSocket().apply {
+            broadcast = true
+            soTimeout = 200
+        }
+        private val received = ConcurrentLinkedQueue<GreeDatagram>()
+        private val reader = Thread({ readLoop() }, "gree-discovery").apply {
+            isDaemon = true
+            start()
+        }
+
+        private fun readLoop() {
             val buf = ByteArray(RECEIVE_BUFFER)
-            while (true) {
-                val now = System.currentTimeMillis()
-                if (now >= deadline) break
-                if (sent < n && now >= start + sent * gap) {
-                    for (a in addresses) {
-                        // One unreachable address (no route, ICMP error) must not stop the sweep.
-                        runCatching { s.send(DatagramPacket(payload, payload.size, InetSocketAddress(a, port))) }
-                    }
-                    sent++
-                    continue
-                }
-                val nextSend = if (sent < n) start + sent * gap else Long.MAX_VALUE
-                val wait = minOf(deadline, nextSend) - now
-                if (wait <= 0) continue
-                s.soTimeout = wait.toInt().coerceAtLeast(1)
+            while (!socket.isClosed) {
                 val p = DatagramPacket(buf, buf.size)
                 try {
-                    s.receive(p)
+                    socket.receive(p)
                     val host = p.address?.hostAddress ?: continue
-                    out += GreeDatagram(host, p.data.copyOfRange(p.offset, p.offset + p.length))
+                    received += GreeDatagram(host, p.data.copyOfRange(p.offset, p.offset + p.length))
                 } catch (e: SocketTimeoutException) {
-                    // next send round or the end of the window
-                } catch (e: java.io.IOException) {
+                    // poll again (lets the loop notice close())
+                } catch (e: SocketException) {
+                    if (socket.isClosed) return
+                } catch (e: IOException) {
                     // e.g. ICMP port unreachable surfaced on some stacks; keep listening
                 }
             }
         }
-        out
+
+        override suspend fun send(hosts: List<String>, port: Int, payload: ByteArray) = withContext(Dispatchers.IO) {
+            for (h in hosts) {
+                runCatching {
+                    socket.send(DatagramPacket(payload, payload.size, InetSocketAddress(InetAddress.getByName(h), port)))
+                }
+            }
+        }
+
+        override fun drain(): List<GreeDatagram> {
+            val out = ArrayList<GreeDatagram>()
+            while (true) out += received.poll() ?: break
+            return out
+        }
+
+        override fun close() {
+            socket.close()
+            reader.join(500)
+        }
     }
 
     private companion object {
