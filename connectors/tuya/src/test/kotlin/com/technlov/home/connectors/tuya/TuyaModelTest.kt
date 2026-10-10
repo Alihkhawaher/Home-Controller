@@ -137,6 +137,27 @@ class TuyaModelTest {
     }
 
     @Test
+    fun theClampsReadingsAreRefreshedUnderEitherNaming() {
+        val owon = listOf(101, 102, 103, 104, 106, 111, 112, 113, 121, 122, 123, 131, 132, 133, 135, 136)
+        val wanted = listOf(101, 102, 103, 111, 112, 113, 121, 122, 123, 132, 133)
+        // As the import QR names them (tuya-local's codes)...
+        val imported = TuyaModel.parseDpSpec(
+            listOf("a" to 100, "b" to 110, "c" to 120).flatMap { (p, base) ->
+                listOf("""[${base + 1},"voltage_$p","int",1,"V",false]""", """[${base + 2},"current_$p","int",3,"A",false]""",
+                    """[${base + 3},"power_$p","int",0,"W",false]""", """[${base + 4},"power_factor_$p","int",2,"",false]""",
+                    """[${base + 6},"energy_$p","int",2,"kWh",false]""")
+            }.plus(listOf("""[131,"energy_total","int",2,"kWh",false]""", """[132,"current_total","int",3,"A",false]""",
+                """[133,"power_total","int",0,"W",false]""", """[135,"frequency","int",0,"Hz",false]""",
+                """[136,"temperature","int",1,"°C",false]"""))
+                .joinToString(",", "[", "]"),
+        )
+        assertEquals(wanted, TuyaModel.refreshIds(owon.toSet(), TuyaModel.points(null, null, emptyMap(), imported)))
+        // ...and as the built-in map does.
+        val builtIn = TuyaModel.points(null, "9rjjf6rdkca9woju", emptyMap(), emptyMap())
+        assertEquals(wanted, TuyaModel.refreshIds(owon.toSet(), builtIn))
+    }
+
+    @Test
     fun importedSpecDrivesDecodeAndEncode() {
         val spec = TuyaModel.parseDpSpec(
             """[[1,"switch_1","bool",0,"",true],[19,"cur_power","int",1,"W",false],[101,"phase_a_voltage","int",1,"V",false]]""",

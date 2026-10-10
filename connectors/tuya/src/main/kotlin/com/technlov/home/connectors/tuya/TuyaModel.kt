@@ -187,10 +187,14 @@ internal object TuyaModel {
      * power and voltage (dps 18/19/20 on a `cz` plug -- tinytuya's (MIT) default UPDATEDPS request), and the OWON
      * PC321-TY's per-phase voltage, current and power plus its current and power totals (dps 101-103, 111-113,
      * 121-123, 132, 133 -- the dps make-all / tuya-local (MIT) mark `force: true` in `pc321ty_energy_meter.yaml`).
-     * Keyed by code, so an imported spec that names them the same way is covered too.
+     * Keyed by code, so an imported spec that names them the same way is covered too: the built-in map says
+     * `phase_a_voltage`, an import made from tuya-local's names says `voltage_a` (a real import refreshed only the
+     * totals until both were listed).
      */
     private val REFRESH_CODES: Set<String> = setOf(TuyaKeys.CURRENT, TuyaKeys.POWER_W, TuyaKeys.VOLTAGE) +
-        listOf("a", "b", "c").flatMap { p -> listOf("voltage", "current", "power").map { "phase_${p}_$it" } } +
+        listOf("a", "b", "c").flatMap { p ->
+            listOf("voltage", "current", "power").flatMap { listOf("phase_${p}_$it", "${it}_$p") }
+        } +
         setOf("current_total", "power_total")
 
     /** The [reported] dps to refresh with UPDATEDPS (see [REFRESH_CODES]), ascending; empty for most devices. */

@@ -89,7 +89,9 @@ against tinytuya's in the tests.
 
 A session keeps **one** TCP connection open to its device for as long as it lives. Many Tuya devices accept a single
 local connection, so the connector never opens a second one while one is open: a reconnect closes the old socket
-first, and a session closes its socket when it is closed.
+first, and a session closes its socket when it is closed. (Not every device is that strict: a 3.3 alarm host, a 3.4
+plug and a 3.5 meter all answered a second client while the first stayed connected, and the first kept working. On
+a device that is, a phone holding the connection keeps other local tools out until it lets go.)
 
 A background reader takes every frame the device sends:
 

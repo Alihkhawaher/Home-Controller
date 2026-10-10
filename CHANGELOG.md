@@ -40,6 +40,8 @@ All notable changes to Home Controller are recorded in this file. The format fol
 - Tuya: a device's own STATUS report could be taken for the reply to a status query, after which replies came one
   request behind. Replies are now matched to their request by command (and by sequence number on protocol 3.3, whose
   devices echo it; 3.4 and 3.5 devices number their replies themselves, as a real 3.4 plug showed).
+- Tuya OWON PC321-TY: an imported meter now gets its per-phase voltage, current and power refreshed too, not just
+  the totals. The import names them `voltage_a` where the built-in map says `phase_a_voltage`.
 - Gree: turning the beep off now survives an app restart. The setting is kept with the device, and the hub saved
   those details only when it opened a device, not after a change.
 - Tuya: closing a device's session now closes its socket. Before, a reconnect left the old socket open, and devices
